@@ -1,3 +1,5 @@
 shapely
 metrics
 matplotlib
+gymnasium
+pygame
