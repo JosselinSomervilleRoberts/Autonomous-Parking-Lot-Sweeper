@@ -10,6 +10,7 @@ def plot_patch(patch, color="blue", alpha=0.5):
         plt.plot(*interior.xy, color=color)
         # Could erase what is inside the interior
         if alpha> 0: plt.fill(*interior.xy, color="white", alpha=1)
+    print("Area of the patch: ", patch.area)
 
 def plot_line(line, color="red"):
     plt.plot(*line.xy, color=color)
