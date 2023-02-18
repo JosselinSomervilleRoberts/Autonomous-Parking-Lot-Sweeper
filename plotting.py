@@ -17,6 +17,7 @@ def plot_line(line, color="red"):
 def plot_area_with_line(line, patch, colorLine="red", colorArea="blue", alpha=0.5):
     plot_line(line, color=colorLine)
     plot_patch(patch, colorArea, alpha)
+    print
 
 
 if __name__ == '__main__':
