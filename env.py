@@ -3,7 +3,7 @@ import numpy as np
 import pygame
 from typing import Tuple, TypedDict
 from dataclasses import dataclass
-from metrics import compute_area_of_path
+from metrics import get_patch_of_line
 from game import SweeperGame
 import time
 
@@ -109,7 +109,8 @@ class SweeperEnv(gym.Env):
 
         # Compute reward
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
-        area = compute_area_of_path(self.sweeper_positions)
+        self.patch = get_patch_of_line(self.sweeper_positions)
+        area = self.patch.area
         reward = area - self.curr_covered_area - self.reward_iter_penalty
         self.curr_covered_area = area
         
@@ -120,7 +121,7 @@ class SweeperEnv(gym.Env):
         self.iter = 0
 
     def render(self):
-        self.game.render(self.sweeper.position, self.sweeper.angle, self.sweeper_positions)
+        self.game.render(self.sweeper.position, self.sweeper.angle, self.sweeper_positions, self.patch)
 
     
     
@@ -145,11 +146,11 @@ if __name__ == "__main__":
 
     for _ in range(1000):
         time.sleep(0.01)
-        env.render()
         action = (0.25, 1.0)#env.action_space.sample()
         FILTER = 0.9
         #action = (FILTER * past_action[0] + (1 - FILTER) * action[0], FILTER * past_action[1] + (1 - FILTER) * action[1])
         observation, reward, done, info = env.step(action)
+        env.render()
         if done:
             observation = env.reset()
     
