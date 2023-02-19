@@ -4,6 +4,8 @@ import pygame
 from typing import Tuple, TypedDict
 from dataclasses import dataclass
 from metrics import compute_area_of_path
+from game import SweeperGame
+import time
 
 @dataclass
 class SweeperConfig:
@@ -14,7 +16,7 @@ class SweeperConfig:
     max_distance : float
     friction : float
 
-    
+
 
 def between(minimum, maximum):
     def func(val):
@@ -44,7 +46,8 @@ class Sweeper:
         self.speed += self.acceleration
         self.speed *= (1 - self.friction)
         self.angle += self.angle_speed
-        self.position += self.speed * np.array([np.cos(self.angle), np.sin(self.angle)])
+        angle = self.angle * np.pi / 180.
+        self.position += self.speed * np.array([np.cos(angle), np.sin(angle)])
 
     
 class SweeperEnv(gym.Env):
@@ -55,7 +58,7 @@ class SweeperEnv(gym.Env):
     def __init__(self, config : SweeperConfig):
         # Extract from config
         accel_low, accel_high = config.acceleration_range
-        steer_low, steer_high = config.acceleration_range
+        steer_low, steer_high = config.steering_angle_range
         max_distance = config.max_distance
         
         # Action Space:
@@ -89,6 +92,9 @@ class SweeperEnv(gym.Env):
         # Reset
         self.reset()
 
+        # Game
+        self.game = SweeperGame()
+
     def _get_observation(self):
         return [self.sweeper.position[0], self.sweeper.position[1]]
 
@@ -113,16 +119,19 @@ class SweeperEnv(gym.Env):
         # Returns observation
         self.iter = 0
 
+    def render(self):
+        self.game.render(self.sweeper.position, self.sweeper.angle, self.sweeper_positions)
+
     
     
     
 if __name__ == "__main__":
     # Implements a random agent for our gym environment
     config = SweeperConfig(
-        acceleration_range=(-1, 1),
+        acceleration_range=(-0.25, 0.25),
         velocity_range=(-1, 1),
         steering_delta_range=1,
-        steering_angle_range=(-1, 1),
+        steering_angle_range=(-90, 90),
         max_distance=10,
         friction=0.1
     )
@@ -132,10 +141,14 @@ if __name__ == "__main__":
     cum_rewards = []
     cum_reward = 0
     positions_list = []
+    past_action = (0, 0)
 
     for _ in range(1000):
-        #env.render()
-        action = env.action_space.sample()
+        time.sleep(0.01)
+        env.render()
+        action = (0.25, 1.0)#env.action_space.sample()
+        FILTER = 0.9
+        #action = (FILTER * past_action[0] + (1 - FILTER) * action[0], FILTER * past_action[1] + (1 - FILTER) * action[1])
         observation, reward, done, info = env.step(action)
         if done:
             observation = env.reset()
