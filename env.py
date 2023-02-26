@@ -1,21 +1,23 @@
 import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
-import pygame
-from typing import Tuple, TypedDict
+from typing import Tuple
 from dataclasses import dataclass
 from metrics import get_patch_of_line
 from game import SweeperGame
 import time
+from PIL import Image
+from math import ceil
 
 @dataclass
 class SweeperConfig:
-    acceleration_range : Tuple[float, float]
-    velocity_range : Tuple[float, float]
-    steering_delta_range : float
-    steering_angle_range : Tuple[float, float]
-    max_distance : float
-    friction : float
-
+    acceleration_range      : Tuple[float, float]
+    velocity_range          : Tuple[float, float]
+    steering_delta_range    : float
+    steering_angle_range    : Tuple[float, float]
+    max_distance            : float
+    friction                : float
+    sweeper_size            : Tuple[int, int]
 
 
 def between(minimum, maximum):
@@ -25,10 +27,9 @@ def between(minimum, maximum):
 
 
 class Sweeper:
-
     def __init__(self, config : SweeperConfig):
         # Linear
-        self.position = np.array([0., 0.])
+        self.position = np.array([150., 500.])
         self.speed = 0.
         self.acceleration = 0.
         self.friction = config.friction
@@ -37,7 +38,10 @@ class Sweeper:
         self.angle = 0.
         self.angle_speed = 0.
 
-    def update(self, acceleration, steering):
+        # Vehicle size
+        self.sweeper_dims = config.sweeper_size
+
+    def update_position(self, acceleration, steering):
         # Set acceleration and steering
         self.acceleration = acceleration
         self.angle_speed = steering
@@ -55,7 +59,7 @@ class SweeperEnv(gym.Env):
     ACTION_INDEX_ACCELERATION = 0
     ACTION_INDEX_STEERING = 1
 
-    def __init__(self, config : SweeperConfig):
+    def __init__(self, config : SweeperConfig, map_fname : str):
         # Extract from config
         accel_low, accel_high = config.acceleration_range
         steer_low, steer_high = config.steering_angle_range
@@ -85,27 +89,37 @@ class SweeperEnv(gym.Env):
         self.curr_covered_area = 0
         self.reward_iter_penalty = 0.01
 
-        # Create sweeper
+        # Create sweeper agent
         self.sweeper = Sweeper(config)
         self.sweeper_positions = [[self.sweeper.position[0], self.sweeper.position[1]]]
+
+        # Create the grid from the png
+        img = Image.open(map_fname).convert("RGB")
+        self.grid = np.array(img)
 
         # Reset
         self.reset()
 
         # Game
-        self.game = SweeperGame()
+        self.game = SweeperGame(grid=self.grid, width=self.grid.shape[0], height=self.grid.shape[1])
 
     def _get_observation(self):
         return [self.sweeper.position[0], self.sweeper.position[1]]
 
     def step(self, action: Tuple[float, float]):
-        # Returns (observation, reward, done, info)
-
+        # Returns (observation, reward, terminated, truncated, info)
         # Update sweeper
         self.iter += 1
         acceleration = action[self.ACTION_INDEX_ACCELERATION]
         steering = action[self.ACTION_INDEX_STEERING]
-        self.sweeper.update(acceleration, steering)
+        prev_position = self.sweeper.position.copy()
+
+        self.sweeper.update_position(acceleration, steering)
+
+        # Check for collision and prevent position update
+        if self.check_collision(prev_position, self.sweeper.position):
+            self.sweeper.position = prev_position
+            return self._get_observation(), -10, False, False, {"collision": True}
 
         # Compute reward
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
@@ -113,30 +127,36 @@ class SweeperEnv(gym.Env):
         area = self.patch.area
         reward = area - self.curr_covered_area - self.reward_iter_penalty
         self.curr_covered_area = area
-        
-        return self._get_observation(), reward, False, {}
+        return self._get_observation(), reward, False, False, {"collision": False}
 
-    def reset(self):
+    def check_collision(self, prev_position, curr_position):
+        lower_x = min(int(prev_position[0]), int(curr_position[0]))
+        higher_x = max(ceil(prev_position[0]), ceil(curr_position[0]))
+        left_y = min(int(prev_position[1]), int(curr_position[1]))
+        right_y = max(ceil(prev_position[1]), ceil(curr_position[1]))
+        return not (np.all(self.grid[lower_x:higher_x+1,left_y:right_y+1,:] == [0, 0, 0]))
+
+    def reset(self, *args):
         # Returns observation
         self.iter = 0
 
     def render(self):
         self.game.render(self.sweeper.position, self.sweeper.angle, self.sweeper_positions, self.patch)
 
-    
-    
-    
+
 if __name__ == "__main__":
     # Implements a random agent for our gym environment
     config = SweeperConfig(
-        acceleration_range=(-0.25, 0.25),
+        # acceleration_range=(-0.25, 0.25),
+        acceleration_range=(-5, 5),
         velocity_range=(-1, 1),
         steering_delta_range=1,
         steering_angle_range=(-90, 90),
         max_distance=10,
-        friction=0.1
+        friction=0.1,
+        sweeper_size=(50, 25)
     )
-    env = SweeperEnv(config)
+    env = SweeperEnv(config=config, map_fname="assets/map1-small.png")
     observation = env.reset()
     rewards = []
     cum_rewards = []
@@ -144,16 +164,17 @@ if __name__ == "__main__":
     positions_list = []
     past_action = (0, 0)
 
-    for _ in range(1000):
-        time.sleep(0.01)
-        action = (0.25, 1.0)#env.action_space.sample()
+    for _ in range(500):
+        # time.sleep(0.01)
+        # action = (0.25, 1.0)    # env.action_space.sample()
+        # TODO: Use a random action. This is just for the baseline model
+        action = env.action_space.sample()
         FILTER = 0.9
         #action = (FILTER * past_action[0] + (1 - FILTER) * action[0], FILTER * past_action[1] + (1 - FILTER) * action[1])
-        observation, reward, done, info = env.step(action)
+        observation, reward, terminated, truncated, info = env.step(action)
         env.render()
-        if done:
+        if terminated:
             observation = env.reset()
-    
         # Keep tracks of rewards
         rewards.append(reward)
         cum_reward += reward
@@ -161,7 +182,6 @@ if __name__ == "__main__":
         positions_list.append(observation)
 
     # Plot rewards
-    import matplotlib.pyplot as plt
     plt.plot(rewards, label="Rewards")
     plt.plot(cum_rewards, label="Cumulative Rewards")
     plt.legend()
@@ -171,4 +191,4 @@ if __name__ == "__main__":
     positions = np.array(positions_list)
     plt.plot(positions[:, 0], positions[:, 1], label="Positions")
     plt.legend()
-    plt.show()
+    # plt.show()

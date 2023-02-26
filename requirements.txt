@@ -3,3 +3,5 @@ metrics
 matplotlib
 gymnasium
 pygame
+numpy
+typing
