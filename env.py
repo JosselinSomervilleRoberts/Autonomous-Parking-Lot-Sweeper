@@ -39,7 +39,7 @@ class Sweeper:
         self.angle_speed = 0.
 
         # Vehicle size
-        self.sweeper_dims = config.sweeper_size
+        self.size = config.sweeper_size
 
     def update_position(self, acceleration, steering):
         # Set acceleration and steering
@@ -101,7 +101,7 @@ class SweeperEnv(gym.Env):
         self.reset()
 
         # Game
-        self.game = SweeperGame(grid=self.grid, width=self.grid.shape[0], height=self.grid.shape[1])
+        self.game = SweeperGame(grid=self.grid, width=1.5*self.grid.shape[0], height=1.5*self.grid.shape[1], sweeper=self.sweeper)
 
     def _get_observation(self):
         return [self.sweeper.position[0], self.sweeper.position[1]]
@@ -123,7 +123,7 @@ class SweeperEnv(gym.Env):
 
         # Compute reward
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
-        self.patch = get_patch_of_line(self.sweeper_positions)
+        self.patch = get_patch_of_line(self.sweeper_positions, width=0.7*self.sweeper.size[1])
         area = self.patch.area
         reward = area - self.curr_covered_area - self.reward_iter_penalty
         self.curr_covered_area = area
@@ -165,7 +165,7 @@ if __name__ == "__main__":
     past_action = (0, 0)
 
     for _ in range(500):
-        # time.sleep(0.01)
+        time.sleep(0.05)
         # action = (0.25, 1.0)    # env.action_space.sample()
         # TODO: Use a random action. This is just for the baseline model
         action = env.action_space.sample()
