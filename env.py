@@ -41,17 +41,17 @@ class Sweeper:
         # Vehicle size
         self.size = config.sweeper_size
 
-    def update_position(self, acceleration, steering):
+    def update_position(self, acceleration, steering, dt=1./60.):
         # Set acceleration and steering
         self.acceleration = acceleration
         self.angle_speed = steering
 
         # Update position and angle (Explicit Euler)
-        self.speed += self.acceleration
-        self.speed *= (1 - self.friction)
-        self.angle += self.angle_speed
+        self.speed += self.acceleration * dt
+        self.speed *= (1 - self.friction * dt)
+        self.angle += self.angle_speed * dt
         angle = self.angle * np.pi / 180.
-        self.position += self.speed * np.array([np.cos(angle), np.sin(angle)])
+        self.position += self.speed * dt * np.array([np.cos(angle), np.sin(angle)])
 
     
 class SweeperEnv(gym.Env):
@@ -106,7 +106,7 @@ class SweeperEnv(gym.Env):
     def _get_observation(self):
         return [self.sweeper.position[0], self.sweeper.position[1]]
 
-    def step(self, action: Tuple[float, float]):
+    def step(self, action: Tuple[float, float], dt=1./60):
         # Returns (observation, reward, terminated, truncated, info)
         # Update sweeper
         self.iter += 1
@@ -114,7 +114,7 @@ class SweeperEnv(gym.Env):
         steering = action[self.ACTION_INDEX_STEERING]
         prev_position = self.sweeper.position.copy()
 
-        self.sweeper.update_position(acceleration, steering)
+        self.sweeper.update_position(acceleration, steering, dt)
 
         # Check for collision and prevent position update
         if self.check_collision(prev_position, self.sweeper.position):
@@ -148,13 +148,13 @@ if __name__ == "__main__":
     # Implements a random agent for our gym environment
     config = SweeperConfig(
         # acceleration_range=(-0.25, 0.25),
-        acceleration_range=(-5, 5),
-        velocity_range=(-1, 1),
-        steering_delta_range=1,
-        steering_angle_range=(-90, 90),
-        max_distance=10,
-        friction=0.1,
-        sweeper_size=(50, 25)
+        acceleration_range=(-5*6*6,5*6*6),  # units/s**2
+        velocity_range=(-1*6, 1*6),           # units/s
+        steering_delta_range=50,
+        steering_angle_range=(-90*3, 90*3),   # degrees/s
+        max_distance=50,                        # units
+        friction=0.1*6,                        # 1/s
+        sweeper_size=(50, 25)                   # units
     )
     env = SweeperEnv(config=config, map_fname="assets/map1-small.png")
     observation = env.reset()
@@ -164,14 +164,18 @@ if __name__ == "__main__":
     positions_list = []
     past_action = (0, 0)
 
+    ACCEL_BY = 10 # Makes the game 5 times faster
+    dt = 1./60
+
     for _ in range(500):
-        time.sleep(0.05)
+        time.sleep(dt)
         # action = (0.25, 1.0)    # env.action_space.sample()
         # TODO: Use a random action. This is just for the baseline model
         action = env.action_space.sample()
-        FILTER = 0.9
-        #action = (FILTER * past_action[0] + (1 - FILTER) * action[0], FILTER * past_action[1] + (1 - FILTER) * action[1])
-        observation, reward, terminated, truncated, info = env.step(action)
+        FILTER = 1 - 0.03 * ACCEL_BY
+        action = (FILTER * past_action[0] + (1 - FILTER) * action[0], FILTER * past_action[1] + (1 - FILTER) * action[1])
+        past_action = action
+        observation, reward, terminated, truncated, info = env.step(action, dt=dt*ACCEL_BY)
         env.render()
         if terminated:
             observation = env.reset()

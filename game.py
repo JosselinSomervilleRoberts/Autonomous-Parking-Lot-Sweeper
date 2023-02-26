@@ -1,5 +1,6 @@
 import pygame
 import numpy as np
+import shapely.geometry as geom
 
 
 class SweeperGame:
@@ -26,9 +27,10 @@ class SweeperGame:
         self.screen.blit(self.grid, (0, 0))
 
         # Draw the sweeper's area
-        self.fill_shapely_outline(patch.exterior, (0,255,0))
-        for interior in patch.interiors:
-            self.fill_shapely_outline(interior, (0,0,0))
+        if isinstance(patch, geom.polygon.Polygon):
+            self.fill_shapely_outline(patch.exterior, (0,255,0))
+            for interior in patch.interiors:
+                self.fill_shapely_outline(interior, (0,0,0))
 
         # Draw the sweeper's path
         pygame.draw.lines(self.screen, (0,0,255), False, self.scale * np.array(path), width=2)
