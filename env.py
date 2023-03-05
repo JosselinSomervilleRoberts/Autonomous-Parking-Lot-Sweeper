@@ -2,108 +2,10 @@ import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
 from typing import Tuple
-from dataclasses import dataclass
-from metrics import get_patch_of_line
-import time
-from PIL import Image
-from math import ceil
 import pygame
 from map import Map
-
-
-@dataclass
-class SweeperConfig:
-    """Configuration for the sweeper speed."""
-    acceleration_range      : Tuple[float, float] = (-60, 60)   # units/s**2
-    velocity_range          : Tuple[float, float] = (-6, 12)    # units/s
-    steering_angle_range    : Tuple[float, float] = (-200, 200) # degrees/s
-    radar_max_distance      : float               = 10          # units
-    friction                : float               = 5.0         # 1/s
-    sweeper_size            : Tuple[float, float] = (2., 1.)    # units
-    num_radars              : int                 = 16          # number of rays
-
-    def scale(self, resolution):
-        self.acceleration_range = (self.acceleration_range[0] * resolution, self.acceleration_range[1] * resolution)
-        self.velocity_range = (self.velocity_range[0] * resolution, self.velocity_range[1] * resolution)
-        self.radar_max_distance *= resolution
-        self.sweeper_size = (self.sweeper_size[0] * resolution, self.sweeper_size[1] * resolution)
-
-
-@dataclass
-class RewardConfig:
-    """Configuration for the reward function."""
-    factor_area_cleaned     : float = 1.0
-    penalty_collision       : float = -100.0
-    penalty_per_second      : float = -0.1
-
-
-@dataclass
-class SweeperStats:
-    """Statistics for the sweeper."""
-    time                    : float = 0.0
-    last_reward             : float = 0.0
-    total_reward            : float = 0.0
-    area_empty              : float = 0.0
-    area_cleaned            : float = 0.0
-    percentage_cleaned      : float = 0.0
-    collisions              : int = 0
-
-    def update(self, new_area: float, new_reward: float, had_collision: bool, dt: float):
-        self.time += dt
-        self.last_reward = new_reward
-        self.total_reward += new_reward
-        self.area_cleaned += new_area
-        self.percentage_cleaned = 100 * self.area_cleaned / self.area_empty
-        if had_collision:
-            self.collisions += 1
-
-
-@dataclass
-class RenderOptions:
-    """Render options for the sweeper game."""
-
-    # General
-    render                  : bool = True
-    width                   : int = 800
-    height                  : int = 800
-    show_sweeper            : bool = True
-    simulation_speed        : float = 1.0
-    first_render            : bool = True
-
-    # Infos
-    show_fps                : bool = False
-    show_time               : bool = False
-    show_score              : bool = False
-    show_simulation_speed   : bool = False
-
-    # Path
-    show_path       : bool = False
-    path_color      : Tuple[int, int, int] = (0, 0, 255)
-    path_alpha_decay : float = 0.1
-    path_num_points : int = 100
-
-    # Bounding bow and center
-    show_bounding_box : bool = False
-    bounding_box_color : Tuple[int, int, int] = (255, 0, 0)
-    show_sweeper_center      : bool = False
-    sweeper_center_color     : Tuple[int, int, int] = (255, 0, 0)
-
-    # Map
-    show_map        : bool = True
-    cell_size       : int = 16
-    cell_empty_color : Tuple[int, int, int] = (255, 255, 255)
-    cell_obstacle_color : Tuple[int, int, int] = (0, 0, 0)
-    cell_cleaned_color : Tuple[int, int, int] = (0, 255, 0)
-    show_area       : bool = True
-
-    # Velocity
-    show_velocity   : bool = False
-    velocity_color  : Tuple[int, int, int] = (0, 0, 255)
-
-    # Distance sensor
-    show_distance_sensors : bool = False
-    distance_sensors_color : Tuple[int, int, int] = (255, 0, 255)
-
+from config import SweeperConfig, RewardConfig, RenderOptions, SweeperStats
+import torch
 
 
 
@@ -213,12 +115,33 @@ class SweeperEnv(gym.Env):
         steer_low, steer_high = sweeper_config.steering_angle_range
         
         # Action Space:
-        # - Acceleration (continuous) # m/s^2
-        # - Steering (continuous)     # degrees/s
-        self.action_space = gym.spaces.Box(
-            low=np.array([accel_low, steer_low]), high=np.array([accel_high, steer_high])
-        )
-        self.observation_space = gym.spaces.Discrete(2)
+        if sweeper_config.action_type == "continuous":
+            # - Acceleration (continuous) # m/s^2
+            # - Steering (continuous)     # degrees/s
+            self.action_space = gym.spaces.Box(
+                low=np.array([accel_low, steer_low]), high=np.array([accel_high, steer_high])
+            )
+        elif sweeper_config.action_type == "discrete-minimum":
+            # - 0: accelerate max forward and don't turn
+            # - 1: don't accelerate and don't turn
+            # - 2: accelerate max backward and don't turn
+            # - 3: accelerate max forward and turn max left
+            # - 4: don't accelerate and turn max left
+            # - 5: accelerate max backward and turn max left
+            # - 6: accelerate max forward and turn max right
+            # - 7: don't accelerate and turn max right
+            # - 8: accelerate max backward and turn max right
+            self.action_space = gym.spaces.Discrete(9)
+        elif sweeper_config.action_type == "discrete" \
+            or "-" in sweeper_config.action_type and sweeper_config.action_type.split("-")[0] == "discrete":
+            nb_discretization = 10
+            if "-" in sweeper_config.action_type:
+                nb_discretization = int(sweeper_config.action_type.split("-")[1])
+            # Discritize the action space in nb_discretization^2
+            self.action_space = gym.spaces.MultiDiscrete([nb_discretization, nb_discretization])
+        else:
+            raise Exception("Unknown action type: " + sweeper_config.action_type)
+        self.action_to_acceleration_and_steering = self.get_action_to_acceleration_and_steering_fn()
         
         # State space:
         # - Position (x, y) (continuous)
@@ -230,6 +153,7 @@ class SweeperEnv(gym.Env):
         #    - 1: Obstacle
         #    - 2: Cleaned
         # - Distances to closest obstacle (M directions) [Contraint -> Max v distance: max_distance]
+        self.observation_space = None # TODO
 
 
     def init_map_and_sweeper(self, sweeper_config: SweeperConfig, resolution: float = 1) -> None:
@@ -249,27 +173,65 @@ class SweeperEnv(gym.Env):
         self.sweeper = Sweeper(sweeper_config)
 
     def _get_observation(self):
-        # Get the observation (copy position, speed, acceleration, angle, steering)
-        # Return as a dict
-        return {
-            "position": self.sweeper.position.copy(),
-            "speed": self.sweeper.speed,
-            "acceleration": self.sweeper.acceleration,
-            "angle": self.sweeper.angle,
-            "steering": self.sweeper.angle_speed,
-            "grid": self.map.grid,
-            "distances": self.radars.copy()
-        }
+        if self.sweeper_config.observation_type == 'dict':
+            # Get the observation (copy position, speed, acceleration, angle, steering)
+            # Return as a dict
+            return {
+                "position": self.sweeper.position.copy(),
+                "speed": self.sweeper.speed,
+                "acceleration": self.sweeper.acceleration,
+                "angle": self.sweeper.angle,
+                "steering": self.sweeper.angle_speed,
+                "grid": self.map.grid,
+                "distances": self.radars.copy()
+            }
+        elif self.sweeper_config.observation_type == 'torch-no-grid':
+            # Get the observation (copy position, speed, acceleration, angle, steering)
+            # Return as a torch tensor
+            return [
+                self.sweeper.speed / self.sweeper_config.velocity_range[1],
+                self.sweeper.acceleration / self.sweeper_config.acceleration_range[1],
+                np.cos(np.deg2rad(self.sweeper.angle)),
+                np.sin(np.deg2rad(self.sweeper.angle)),
+                *(self.radars / (self.sweeper_config.radar_max_distance * self.resolution))
+            ]
+        elif self.sweeper_config.observation_type == 'torch-grid':
+            raise NotImplementedError
+
+    def get_action_to_acceleration_and_steering_fn(self):
+        if self.sweeper_config.action_type == "continuous":
+            return lambda action: action
+        elif self.sweeper_config.action_type == "discrete-minimum":
+            return lambda action: {
+                0: (self.sweeper_config.acceleration_range[1], 0),
+                1: (0, 0),
+                2: (self.sweeper_config.acceleration_range[0], 0),
+                3: (self.sweeper_config.acceleration_range[1], self.sweeper_config.steering_angle_range[0]),
+                4: (0, self.sweeper_config.steering_angle_range[0]),
+                5: (self.sweeper_config.acceleration_range[0], self.sweeper_config.steering_angle_range[0]),
+                6: (self.sweeper_config.acceleration_range[1], self.sweeper_config.steering_angle_range[1]),
+                7: (0, self.sweeper_config.steering_angle_range[1]),
+                8: (self.sweeper_config.acceleration_range[0], self.sweeper_config.steering_angle_range[1]),
+            }[action]
+        elif sweeper_config.action_type == "discrete" \
+            or "-" in sweeper_config.action_type and sweeper_config.action_type.split("-")[0] == "discrete":
+            nb_discretization = 10
+            if "-" in sweeper_config.action_type:
+                nb_discretization = int(sweeper_config.action_type.split("-")[1])
+            # Discritize the action space in nb_discretization^2
+            return lambda action: (
+                np.interp(action[0], [0, nb_discretization-1], [self.sweeper_config.acceleration_range[0], self.sweeper_config.acceleration_range[1]]),
+                np.interp(action[1], [0, nb_discretization-1], [self.sweeper_config.steering_angle_range[0], self.sweeper_config.steering_angle_range[1]])
+            )
 
 
-    def step(self, action: Tuple[float, float], dt=1./60):
-        """Returns (observation, reward, terminated, truncated, info)"""
+    def step(self, action, dt=1./60):
+        """Returns (observation, reward, terminated, info)"""
         dt *= self.render_options.simulation_speed
 
         # Update sweeper
         self.iter += 1
-        acceleration = action[self.ACTION_INDEX_ACCELERATION]
-        steering = action[self.ACTION_INDEX_STEERING]
+        (acceleration, steering) = self.action_to_acceleration_and_steering(action)
         prev_position = self.sweeper.position.copy()
         prev_angle = self.sweeper.angle
 
@@ -314,7 +276,8 @@ class SweeperEnv(gym.Env):
         self.stats.update(new_area=new_area, new_reward=reward, had_collision=had_collision, dt=dt)
 
         # Return observation, reward, terminated, truncated, info
-        return self._get_observation(), reward, False, False, {"collision": had_collision}
+        done = had_collision and self.reward_config.done_on_collision or self.stats.percentage_cleaned >= 90.0
+        return self._get_observation(), reward, done, False, {"collision": had_collision}
 
     def compute_radars(self):
         for i in range(len(self.radars)):
@@ -325,7 +288,7 @@ class SweeperEnv(gym.Env):
         return self.map.check_collision(self.sweeper.get_bounding_box())
 
     def reset(self, *args):
-        """Reset the environment and return an initial observation."""
+        """Reset the environment and return an initial observation and info."""
         self.iter = 0
         self.stats = SweeperStats()
 
@@ -352,7 +315,7 @@ class SweeperEnv(gym.Env):
         self.compute_radars()
 
         # Return observation
-        return self._get_observation()
+        return self._get_observation(), {"collision": False,}
 
 
 
@@ -556,7 +519,7 @@ if __name__ == "__main__":
     # Implements a random agent for our gym environment
     sweeper_config = SweeperConfig()
     env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 2.0, debug=False)
-    observation = env.reset()
+    observation, _ = env.reset()
     rewards = []
     cum_rewards = []
     cum_reward = 0
