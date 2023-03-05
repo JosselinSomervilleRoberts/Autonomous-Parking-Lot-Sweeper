@@ -205,6 +205,25 @@ class Map:
     def get_empty_area(self, resolution=1.0) -> float:
         return len(self.get_empty_tiles()) / resolution
 
+    def compute_distance_to_closest_obstacle(self, pos, angle, max_distance=1000):
+        """Returns the distance to the closest obstacle in the given direction"""
+        # Compute the direction vector
+        direction = np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
+
+        # Compute the distance to the closest obstacle using a step by step approach
+        for distance in range(1, max_distance):
+            # Check if the next cell is an obstacle
+            next_cell = pos + distance * direction
+            
+            # Round and check if within bounds
+            rounded_cell = [int(round(next_cell[0])), int(round(next_cell[1]))]
+            if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
+                return distance-1
+            if self.grid[rounded_cell[0], rounded_cell[1]] == 1:
+                return distance-1
+        return max_distance
+
+
 
 if __name__ == "__main__":
     # This is just to check out the map generation

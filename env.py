@@ -17,14 +17,15 @@ class SweeperConfig:
     acceleration_range      : Tuple[float, float] = (-100, 100) # units/s**2
     velocity_range          : Tuple[float, float] = (-3, 3)     # units/s
     steering_angle_range    : Tuple[float, float] = (-200, 200) # degrees/s
-    sensor_max_distance     : float               = 10          # units
+    radar_max_distance      : float               = 10          # units
     friction                : float               = 5.0         # 1/s
-    sweeper_size            : Tuple[float, float] = (2., 1.)       # units
+    sweeper_size            : Tuple[float, float] = (2., 1.)    # units
+    num_radars              : int                 = 16           # number of rays
 
     def scale(self, resolution):
         self.acceleration_range = (self.acceleration_range[0] * resolution, self.acceleration_range[1] * resolution)
         self.velocity_range = (self.velocity_range[0] * resolution, self.velocity_range[1] * resolution)
-        self.sensor_max_distance *= resolution
+        self.radar_max_distance *= resolution
         self.sweeper_size = (self.sweeper_size[0] * resolution, self.sweeper_size[1] * resolution)
 
 
@@ -183,6 +184,7 @@ class SweeperEnv(gym.Env):
 
     def __init__(self, sweeper_config: SweeperConfig, reward_config: RewardConfig, render_options: RenderOptions, resolution: float = 1, debug: bool = False):
         self.debug = debug
+        self.sweeper_config = sweeper_config
         self.render_options = render_options
         self.reward_config = reward_config
         self.resolution = resolution
@@ -283,7 +285,16 @@ class SweeperEnv(gym.Env):
         reward = self.reward_config.factor_area_cleaned * new_area + self.reward_config.penalty_per_second * dt
         if had_collision:
             reward += self.reward_config.penalty_collision
+
+        # Radars
+        for i in range(len(self.radars)):
+            radar_angle = self.sweeper.angle + 360. / len(self.radars) * i
+            self.radars[i] = self.map.compute_distance_to_closest_obstacle(self.sweeper.position, radar_angle, int(self.sweeper_config.radar_max_distance * self.resolution))
+
+        # Update stats
         self.stats.update(new_area=new_area, new_reward=reward, had_collision=had_collision, dt=dt)
+
+        # Return observation, reward, terminated, truncated, info
         return self._get_observation(), reward, False, False, {"collision": had_collision}
 
     def check_collision(self):
@@ -311,7 +322,9 @@ class SweeperEnv(gym.Env):
         self.sweeper.acceleration = 0
         self.sweeper.angle_speed = 0
         self.sweeper_positions = []
-
+        
+        # Radars
+        self.radars = np.ones(self.sweeper_config.num_radars) * self.sweeper_config.radar_max_distance
 
 
 
@@ -338,7 +351,7 @@ class SweeperEnv(gym.Env):
 
     def render(self, clock: pygame.time.Clock = None):
         # Render map
-        if self.render_options.show_path: self.render_options.first_render = True
+        if self.render_options.show_path or self.render_options.show_distance_sensors: self.render_options.first_render = True
         self.map.display(self.sweeper, self.screen, self.render_options, rerender=self.render_options.first_render)
         self.render_options.first_render = False
 
@@ -376,8 +389,15 @@ class SweeperEnv(gym.Env):
             pygame.draw.line(self.screen, self.render_options.velocity_color, self.render_options.cell_size * sweeper_pos, self.render_options.cell_size * (sweeper_pos + direction), width=2)
             
         # Dislay distance sensors
-        # TODO: display distance sensors
-
+        if self.render_options.show_distance_sensors:
+            for i in range(self.sweeper_config.num_radars):
+                distance = self.radars[i]
+                # Draw the radar if the distance < max_distance
+                if distance < self.sweeper_config.radar_max_distance * self.resolution:
+                    angle = self.sweeper.angle + 360 / self.sweeper_config.num_radars * i
+                    direction = distance * np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
+                    pygame.draw.line(self.screen, self.render_options.distance_sensors_color, self.render_options.cell_size * sweeper_pos, self.render_options.cell_size * (sweeper_pos + direction), width=2) 
+                    pygame.draw.circle(self.screen, self.render_options.distance_sensors_color, self.render_options.cell_size * (sweeper_pos + direction), 5)
         # Updates the screen
         self.display_footer(clock=clock)
         pygame.display.flip()
