@@ -19,21 +19,25 @@ class SweeperGame:
         self.map = Map(width, height)
 
         # Init sweeper
-        self.carImg = pygame.transform.scale(pygame.image.load('assets/car.png'), sweeper.size)
+        self.carImg = pygame.transform.scale(pygame.image.load('assets/car.png'), (sweeper.size[0] * cell_size, sweeper.size[1] * cell_size))
+        self.sweeper = sweeper
 
     def fill_shapely_outline(self, input, color=(0,0,0)):
         x, y = input.xy
         outline = [[x[i], y[i]] for i in range(len(x))]
         pygame.draw.polygon(self.screen, color, self.cell_size * np.array(outline))
 
-    def render(self, sweeper_pos, sweeper_angle, path, patch):
+    def render(self, path=None):
         # Render map
         self.map.display(self.screen, self.cell_size)
 
         # Draw the sweeper's path
-        pygame.draw.lines(self.screen, (0,0,255), False, self.cell_size * np.array(path), width=2)
+        if path is not None:
+            pygame.draw.lines(self.screen, (0,0,255), False, self.cell_size * np.array(path), width=2)
 
         # Draw the sweeper
+        sweeper_pos = self.sweeper.position
+        sweeper_angle = self.sweeper.angle
         carImg_temp = pygame.transform.rotate(self.carImg, -sweeper_angle)
         carImg_rotated_rect = carImg_temp.get_rect()
         carImg_rotated_rect.center = sweeper_pos * self.cell_size

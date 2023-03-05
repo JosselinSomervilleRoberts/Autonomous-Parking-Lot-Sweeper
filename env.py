@@ -29,7 +29,7 @@ def between(minimum, maximum):
 class Sweeper:
     def __init__(self, config : SweeperConfig):
         # Linear
-        self.position = np.array([150., 500.])
+        self.position = np.array([0., 0.])
         self.speed = 0.
         self.acceleration = 0.
         self.friction = config.friction
@@ -52,6 +52,18 @@ class Sweeper:
         self.angle += self.angle_speed * dt
         angle = self.angle * np.pi / 180.
         self.position += self.speed * dt * np.array([np.cos(angle), np.sin(angle)])
+
+    def get_bounding_box(self):
+        # Get bounding box of the sweeper (the position is the center of the sweeper)
+        x, y = self.position
+        w, h = self.size
+        angle = self.angle * np.pi / 180.
+        return np.array([
+            [x + w/2 * np.cos(angle) - h/2 * np.sin(angle), y + w/2 * np.sin(angle) + h/2 * np.cos(angle)],
+            [x - w/2 * np.cos(angle) - h/2 * np.sin(angle), y - w/2 * np.sin(angle) + h/2 * np.cos(angle)],
+            [x - w/2 * np.cos(angle) + h/2 * np.sin(angle), y - w/2 * np.sin(angle) - h/2 * np.cos(angle)],
+            [x + w/2 * np.cos(angle) + h/2 * np.sin(angle), y + w/2 * np.sin(angle) - h/2 * np.cos(angle)]
+        ])
 
     
 class SweeperEnv(gym.Env):
@@ -112,8 +124,20 @@ class SweeperEnv(gym.Env):
 
         self.sweeper.update_position(acceleration, steering, dt)
 
-        # Check for collision and prevent position update
+        # Check for collision
+        # If there is one, find with a binary search the last position where there was no collision
         if self.check_collision(prev_position, self.sweeper.position):
+            collision_position = self.sweeper.position.copy()
+            print("Collision at", collision_position, "from", prev_position, "with action", action)
+            # Binary search between prev_position and collision_position
+            N_BINARY_SEARCH = 5
+            for i in range(N_BINARY_SEARCH):
+                mid_position = (prev_position + collision_position) / 2
+                self.sweeper.position = mid_position
+                if self.check_collision(prev_position, mid_position):
+                    collision_position = mid_position
+                else:
+                    prev_position = mid_position
             self.sweeper.position = prev_position
             return self._get_observation(), -10, False, False, {"collision": True}
 
@@ -126,18 +150,29 @@ class SweeperEnv(gym.Env):
         return self._get_observation(), reward, False, False, {"collision": False}
 
     def check_collision(self, prev_position, curr_position):
-        return False
+        return self.game.map.check_collision(self.sweeper.get_bounding_box())
 
     def reset(self, *args):
         # Returns observation
         self.iter = 0
         self.game.map.init_random()
 
+        # Reset sweeper by setting it's position to a random empty cell
+        empty_cells = self.game.map.get_empty_tiles()
+        self.sweeper.position = empty_cells[np.random.randint(len(empty_cells))].astype(float)
+        self.sweeper.angle = np.random.randint(360)
+        self.sweeper.speed = 0
+        self.sweeper.acceleration = 0
+        self.sweeper.angle_speed = 0
+
     def render(self):
-        self.game.render(self.sweeper.position, self.sweeper.angle, self.sweeper_positions, self.patch)
+        self.game.render()#self.sweeper.position, self.sweeper.angle, self.sweeper_positions, self.patch)
 
 
 if __name__ == "__main__":
+    import pygame
+    import sys
+
     # Implements a random agent for our gym environment
     config = SweeperConfig(
         # acceleration_range=(-0.25, 0.25),
@@ -147,7 +182,7 @@ if __name__ == "__main__":
         steering_angle_range=(-90*3, 90*3),   # degrees/s
         max_distance=50,                        # units
         friction=0.1*6,                        # 1/s
-        sweeper_size=(50, 25)                   # units
+        sweeper_size=(6, 3)                   # cells
     )
     env = SweeperEnv(config=config)
     observation = env.reset()
@@ -157,10 +192,15 @@ if __name__ == "__main__":
     positions_list = []
     past_action = (0, 0)
 
-    ACCEL_BY = 10 # Makes the game 5 times faster
+    ACCEL_BY = 3 # Makes the game 5 times faster
     dt = 1./60
 
     for _ in range(500):
+        # Checks for event to close the window
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                sys.exit()
+
         time.sleep(dt)
         # action = (0.25, 1.0)    # env.action_space.sample()
         # TODO: Use a random action. This is just for the baseline model
@@ -169,6 +209,7 @@ if __name__ == "__main__":
         action = (FILTER * past_action[0] + (1 - FILTER) * action[0], FILTER * past_action[1] + (1 - FILTER) * action[1])
         past_action = action
         observation, reward, terminated, truncated, info = env.step(action, dt=dt*ACCEL_BY)
+        print("Reward: ", reward, "Cumulative Reward: ", cum_reward, "Terminated: ", terminated, "Truncated: ", truncated, "Info: ", info)
         env.render()
         if terminated:
             observation = env.reset()

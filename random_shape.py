@@ -85,9 +85,7 @@ def get_random_points(n, min_width, max_width, min_height, max_height, mindst=No
         if rec > 10:
             raise ValueError("could not generate points")
         return get_random_points(n, min_width, max_width, min_height, max_height, mindst=mindst, rec=rec+1)
-    print(a)
     a = a * np.array([max_width - min_width, max_height - min_height]) + np.array([min_width, min_height])
-    print(a)
     return a
 
 

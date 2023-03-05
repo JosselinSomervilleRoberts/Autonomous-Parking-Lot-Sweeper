@@ -90,40 +90,31 @@ class Map:
                 if polygon.contains(Point(x, y)):
                     self.grid[x, y] = value
 
-    def is_colliding(self, rect: Polygon) -> bool:
-        # Check if bounding box is colliding
-        if self.is_bounding_box_colliding(rect):
-            # Check if rotated rectangle is colliding
-            return self.is_rotated_rectangle_colliding(rect)
-        else:
+    def check_collision(self, rectangle: np.ndarray) -> bool:
+        # Convert the coordinates to integers
+        x_min, y_min = np.floor(rectangle.min(axis=0)).astype(int)
+        x_max, y_max = np.ceil(rectangle.max(axis=0)).astype(int)
+        
+        # Check if the rectangle is completely outside the grid
+        if x_max < 0 or y_max < 0 or x_min >= self.grid.shape[0] or y_min >= self.grid.shape[1]:
             return False
-
-    def is_bounding_box_colliding(self, rect: Polygon) -> bool:
-        # Get bounding box
-        min_x = int(rect.bounds[0])
-        min_y = int(rect.bounds[1])
-        max_x = int(rect.bounds[2])
-        max_y = int(rect.bounds[3])
-
-        # Check if bounding box is colliding
-        if min_x < 0 or min_y < 0 or max_x >= self.width or max_y >= self.height:
+        
+        # Check if any of the four points of the rectangle are obstacles
+        for point in rectangle.astype(int):
+            if self.grid[point[0], point[1]] == 1:
+                return True
+        
+        # Check if the rectangle completely covers an obstacle cell
+        if np.all(self.grid[x_min:x_max+1, y_min:y_max+1] == 1):
             return True
-
-        return False
-
-    def is_rotated_rectangle_colliding(self, rect: Polygon) -> bool:
-        # Get bounding box
-        min_x = int(rect.bounds[0])
-        min_y = int(rect.bounds[1])
-        max_x = int(rect.bounds[2])
-        max_y = int(rect.bounds[3])
-
-        # Check if rotated rectangle is colliding
-        for x in range(min_x, max_x):
-            for y in range(min_y, max_y):
-                if rect.contains(Point(x, y)) and self.grid[x, y] == 1:
+        
+        # Check if any obstacle cell is inside the rectangle
+        for i in range(x_min, x_max+1):
+            for j in range(y_min, y_max+1):
+                if self.grid[i, j] == 1 and ((i, j) not in rectangle.astype(int)):
                     return True
-
+        
+        # No collision found
         return False
 
     def get_cleaned_tiles(self) -> List[Tuple[int, int]]:
@@ -175,7 +166,6 @@ if __name__ == "__main__":
     # Initiate map
     map = Map(100, 100)
     map.init_random()
-    print(map.grid)
 
     # Main loop
     while True:
