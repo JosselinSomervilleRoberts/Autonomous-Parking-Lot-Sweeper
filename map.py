@@ -170,6 +170,8 @@ class Map:
             # Update only around the sweeper
             # Get bounding box
             SWEEPER_SIZE_FACTOR = 1.8 * max(1., render_options.simulation_speed)
+            if render_options.show_velocity:
+                SWEEPER_SIZE_FACTOR *= 1 + abs(sweeper.speed * 0.04)
             bounding_box = sweeper.get_bounding_box(factor=SWEEPER_SIZE_FACTOR)
             x_min, y_min = np.floor(bounding_box.min(axis=0)).astype(int)
             x_max, y_max = np.ceil(bounding_box.max(axis=0)).astype(int)

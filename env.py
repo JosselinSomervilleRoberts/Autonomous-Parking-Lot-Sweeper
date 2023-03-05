@@ -79,8 +79,7 @@ class RenderOptions:
     show_path       : bool = False
     path_color      : Tuple[int, int, int] = (0, 0, 255)
     path_alpha_decay : float = 0.1
-    path_alpha_min : float = 0.1
-    path_alpha_max : float = 1.0
+    path_num_points : int = 100
 
     # Bounding bow and center
     show_bounding_box : bool = False
@@ -339,12 +338,19 @@ class SweeperEnv(gym.Env):
 
     def render(self, clock: pygame.time.Clock = None):
         # Render map
+        if self.render_options.show_path: self.render_options.first_render = True
         self.map.display(self.sweeper, self.screen, self.render_options, rerender=self.render_options.first_render)
         self.render_options.first_render = False
 
         # Draw the sweeper's path (with alpha decreasing with time)
         if self.render_options.show_path:
-            pygame.draw.lines(self.screen, self.render_options.path_color, False, self.render_options.cell_size * np.array(self.sweeper_positions), width=2)
+            transparency = 1.0
+            for i in range(min(self.render_options.path_num_points, len(self.sweeper_positions)) - 1):
+                pygame.draw.line(self.screen, (self.render_options.path_color[0], self.render_options.path_color[1], self.render_options.path_color[2], int(transparency * 255)),
+                                 self.render_options.cell_size * np.array(self.sweeper_positions[-i-1]),
+                                 self.render_options.cell_size * np.array(self.sweeper_positions[-i-2]),
+                                 width=2)
+                transparency *= self.render_options.path_alpha_decay
 
         # Draw the sweeper (seeper_pos is the center of the sweeper)
         sweeper_pos = self.sweeper.position
@@ -364,8 +370,10 @@ class SweeperEnv(gym.Env):
         if self.render_options.show_sweeper_center:
             pygame.draw.circle(self.screen, self.render_options.sweeper_center_color, self.render_options.cell_size * sweeper_pos, 5)
 
-        # Display velocity vector
-        # TODO: display velocity vector
+        # Display velocity vector as an arrow
+        if self.render_options.show_velocity:
+            direction = 0.2 * self.sweeper.speed * np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))])
+            pygame.draw.line(self.screen, self.render_options.velocity_color, self.render_options.cell_size * sweeper_pos, self.render_options.cell_size * (sweeper_pos + direction), width=2)
             
         # Dislay distance sensors
         # TODO: display distance sensors
@@ -497,7 +505,7 @@ if __name__ == "__main__":
 
     # Implements a random agent for our gym environment
     sweeper_config = SweeperConfig()
-    env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 3.0, debug=False)
+    env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 2.0, debug=False)
     observation = env.reset()
     rewards = []
     cum_rewards = []
