@@ -20,6 +20,46 @@ class SweeperConfig:
     sweeper_size            : Tuple[int, int]
 
 
+@dataclass
+class RenderOptions:
+    """Render options for the sweeper game."""
+
+    # General
+    render                  : bool = True
+    show_sweeper            : bool = True
+
+    # Path
+    show_path       : bool = False
+    path_color      : Tuple[int, int, int] = (0, 0, 255)
+    path_alpha_decay : float = 0.1
+    path_alpha_min : float = 0.1
+    path_alpha_max : float = 1.0
+
+    # Bounding bow and center
+    show_bounding_box : bool = False
+    bounding_box_color : Tuple[int, int, int] = (255, 0, 0)
+    show_sweeper_center      : bool = False
+    sweeper_center_color     : Tuple[int, int, int] = (255, 0, 0)
+
+    # Map
+    show_map        : bool = True
+    cell_size       : int = 8
+    cell_empty_color : Tuple[int, int, int] = (255, 255, 255)
+    cell_obstacle_color : Tuple[int, int, int] = (0, 0, 0)
+    cell_cleaned_color : Tuple[int, int, int] = (0, 255, 0)
+    show_area       : bool = True
+
+    # Velocity
+    show_velocity   : bool = False
+    velocity_color  : Tuple[int, int, int] = (0, 0, 255)
+
+    # Distance sensor
+    show_distance_sensor : bool = False
+    distance_sensor_color : Tuple[int, int, int] = (255, 0, 255)
+
+
+
+
 def between(minimum, maximum):
     def func(val):
         return minimum <= val <= maximum
@@ -71,9 +111,9 @@ class SweeperEnv(gym.Env):
     ACTION_INDEX_ACCELERATION = 0
     ACTION_INDEX_STEERING = 1
 
-    def __init__(self, config : SweeperConfig, debug=False, needs_rendering=True):
+    def __init__(self, config: SweeperConfig, render_options: RenderOptions, debug=False):
         self.debug = debug
-        self.needs_rendering = needs_rendering
+        self.render_options = render_options
 
         # Extract from config
         accel_low, accel_high = config.acceleration_range
@@ -182,6 +222,57 @@ class SweeperEnv(gym.Env):
         self.game.render(render_all=self.first_render)
         self.first_render = False
 
+    def process_event(self, event):
+        # Checks for key just pressed
+        # - H: displays help (to summarize the keys)
+        # - R: resets the environment
+        # - Q: quits the program
+        # - B: toggles the display of the bounding box
+        # - P: toggles the display of the path
+        # - S: toggles the display of the sweeper
+        # - A: toggles the display of the area
+        # - V: toggles the display of the velocity
+        # - +: increases the speed of the simulation
+        # - -: decreases the speed of the simulation
+
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_q:
+                sys.exit()
+            if event.key == pygame.K_r:
+                observation = env.reset()
+            if event.key == pygame.K_h:
+                print("Help")
+                print("----")
+                print("Q: Quit")
+                print("R: Reset")
+                print("H: Help")
+                print("B: Toggle bounding box")
+                print("P: Toggle path")
+                print("S: Toggle sweeper")
+                print("A: Toggle area")
+                print("V: Toggle velocity")
+                print("+: Increase speed")
+                print("-: Decrease speed")
+                print("Left/Right: Steer")
+                print("Up/Down: Accelerate/Decelerate")
+
+            if event.key == pygame.K_b:
+                self.render_options.show_bounding_box = not self.render_options.show_bounding_box
+                self.render_options.show_sweeper_center = not self.render_options.show_sweeper_center
+            if event.key == pygame.K_p:
+                self.render_options.show_path = not self.render_options.show_path
+            if event.key == pygame.K_s:
+                self.render_options.show_sweeper = not self.render_options.show_sweeper
+            if event.key == pygame.K_a:
+                self.render_options.show_area = not self.render_options.show_area
+            if event.key == pygame.K_v:
+                self.render_options.show_velocity = not self.render_options.show_velocity
+            if event.key == pygame.K_EQUALS:
+                self.render_options.speed *= 2
+            if event.key == pygame.K_MINUS:
+                self.render_options.speed /= 2
+
+
 
 if __name__ == "__main__":
     import pygame
@@ -217,6 +308,10 @@ if __name__ == "__main__":
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 sys.exit()
+
+            
+
+
 
         # Checks for key pressed
         keys = pygame.key.get_pressed()
