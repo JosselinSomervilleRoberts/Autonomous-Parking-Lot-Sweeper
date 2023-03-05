@@ -121,23 +121,23 @@ def select_action(state):
         return torch.tensor([[env.action_space.sample()]], device=device, dtype=torch.long)
 
 
-episode_durations = []
+episode_rewards = []
 
 
-def plot_durations(show_result=False):
+def plot_rewards(show_result=False):
     plt.figure(1)
-    durations_t = torch.tensor(episode_durations, dtype=torch.float)
+    rewards_t = torch.tensor(episode_rewards, dtype=torch.float)
     if show_result:
         plt.title('Result')
     else:
         plt.clf()
         plt.title('Training...')
     plt.xlabel('Episode')
-    plt.ylabel('Duration')
-    plt.plot(durations_t.numpy())
+    plt.ylabel('Cumulative Rewards')
+    plt.plot(rewards_t.numpy())
     # Take 100 episode averages and plot them too
-    if len(durations_t) >= 100:
-        means = durations_t.unfold(0, 100, 1).mean(1).view(-1)
+    if len(rewards_t) >= 100:
+        means = rewards_t.unfold(0, 100, 1).mean(1).view(-1)
         means = torch.cat((torch.zeros(99), means))
         plt.plot(means.numpy())
 
@@ -207,9 +207,11 @@ for i_episode in range(num_episodes):
     # Initialize the environment and get it's state
     state, info = env.reset(new_map=(i_episode == 0))
     state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+    cum_reward = 0
     for t in count():
         action = select_action(state)
         observation, reward, terminated, truncated, _ = env.step(action.item())
+        cum_reward += reward
         reward = torch.tensor([reward], device=device)
         done = terminated or truncated
 
@@ -236,12 +238,12 @@ for i_episode in range(num_episodes):
         target_net.load_state_dict(target_net_state_dict)
 
         if done:
-            episode_durations.append(t + 1)
-            plot_durations()
+            episode_rewards.append(cum_reward)
+            plot_rewards()
             break
 
 print('Complete')
-plot_durations(show_result=True)
+plot_rewards(show_result=True)
 plt.ioff()
 plt.show()
 

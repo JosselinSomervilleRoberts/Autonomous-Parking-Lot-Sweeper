@@ -4,6 +4,7 @@ from dataclasses import dataclass
 @dataclass
 class SweeperConfig:
     """Configuration for the sweeper speed."""
+    num_max_steps           : int                 = 1000        # number of steps before the episode ends
     observation_type        : str                 = 'dict'      # 'dict', 'torch-no-grid', 'torch-grid'
     action_type             : str                 = 'continuous'# 'continuous', 'discrete-minimum', 'discrete' or 'discrete-x' with x an integer
     acceleration_range      : Tuple[float, float] = (-60, 60)   # units/s**2

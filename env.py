@@ -279,7 +279,7 @@ class SweeperEnv(gym.Env):
         self.stats.update(new_area=new_area, new_reward=reward, had_collision=had_collision, dt=dt)
 
         # Return observation, reward, terminated, truncated, info
-        done = had_collision and self.reward_config.done_on_collision or self.stats.percentage_cleaned >= 90.0
+        done = had_collision and self.reward_config.done_on_collision or self.stats.percentage_cleaned >= 90.0 or self.iter >= self.sweeper_config.num_max_steps
         return self._get_observation(), reward, done, False, {"collision": had_collision}
 
     def compute_radars(self):
