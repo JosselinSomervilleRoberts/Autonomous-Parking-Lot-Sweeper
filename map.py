@@ -31,8 +31,9 @@ class Map:
         self.height = height
         self.grid = np.zeros((width, height), dtype=np.int8)
         self.cleaning_path = []
+        self.cleaned_cells_to_display = []
 
-    def init_random(self):
+    def init_random(self, render_options):
         # Call generate_random with random parameters
         self.generate_random(
             nb_obstacles=random.randint(5, 10),
@@ -47,6 +48,28 @@ class Map:
         for y in range(self.height):
             self.grid[0, y] = 1
             self.grid[self.width - 1, y] = 1
+
+        # Generates an image of the map
+        if render_options.render:
+            self.generate_image(render_options)
+
+    def generate_image(self, render_options):
+        """Generates an image of the map"""
+        # Create image
+        self.image = pygame.Surface(self.grid.shape)
+        self.image.fill(render_options.cell_empty_color)
+
+        # Fill in obstacles
+        cleaned_color = render_options.cell_cleaned_color if render_options.show_area else render_options.cell_empty_color
+        for x in range(self.width):
+            for y in range(self.height):
+                if self.grid[x, y] == 1:
+                    self.image.set_at((x, y), render_options.cell_obstacle_color)
+                if self.grid[x, y] == 2:
+                    self.image.set_at((x, y), cleaned_color)
+
+        # Scale image
+        self.image = pygame.transform.scale(self.image, (self.width * render_options.cell_size, self.height * render_options.cell_size))
 
 
     def generate_random(self, nb_obstacles, avg_size_obstacles, var_size_obstacles):
@@ -107,6 +130,7 @@ class Map:
             for y in range(min_y, max_y):
                 if self.grid[x, y] == 0 and polygon.contains(Point(x, y)):
                     self.grid[x, y] = value
+                    self.cleaned_cells_to_display.append((x, y))
                     count += 1
         return count
 
@@ -163,17 +187,14 @@ class Map:
         tile_size = render_options.cell_size
         # Redraw everything
         if rerender:
-            # Fill screen with obstacle color
-            screen.fill(render_options.cell_obstacle_color)
-            
-            # Display cleaned tiles
-            for x, y in self.get_cleaned_tiles():
-                color = render_options.cell_cleaned_color if render_options.show_area else render_options.cell_empty_color
-                pygame.draw.rect(screen, color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+            if render_options.show_area:
+                # Draw on the image
+                for x, y in self.cleaned_cells_to_display:
+                    pygame.draw.rect(self.image, render_options.cell_cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
-            # Display empty tiles
-            for x, y in self.get_empty_tiles():
-                pygame.draw.rect(screen, render_options.cell_empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+            # Displays self.image
+            screen.blit(self.image, (0, 0))
+
         else:
             # Update only around the sweeper
             # Get bounding box
@@ -230,45 +251,3 @@ class Map:
             if self.grid[rounded_cell[0], rounded_cell[1]] == 1:
                 return distance-1
         return max_distance
-
-
-
-if __name__ == "__main__":
-    # This is just to check out the map generation
-    # Initiates a random map and displays it with pygame
-    import sys
-
-    # Initiate pygame
-    pygame.init()
-    screen = pygame.display.set_mode((800, 800))
-    clock = pygame.time.Clock()
-
-    # Initiate map
-    map = Map(100, 100)
-    map.init_random()
-
-    # Main loop
-    while True:
-        # Check for events
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                pygame.quit()
-                sys.exit()
-
-        # Display map
-        screen.fill((0, 0, 0))
-        map.display(screen, 8)
-        pygame.display.flip()
-
-        # Tick clock
-        clock.tick(60)
-
-        # Selects a random empty tile and cleans it
-        empty_tiles = map.get_empty_tiles()
-        if len(empty_tiles) > 0:
-            x, y = random.choice(empty_tiles)
-            map.grid[x, y] = 2
-
-    # Quit pygame
-    pygame.quit()
-

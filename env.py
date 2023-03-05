@@ -243,7 +243,7 @@ class SweeperEnv(gym.Env):
 
         # Create map
         self.map = Map(map_width, map_height)
-        self.map.init_random()
+        self.map.init_random(self.render_options)
 
         # Create sweeper
         self.sweeper = Sweeper(sweeper_config)
@@ -331,7 +331,7 @@ class SweeperEnv(gym.Env):
 
         # Reset map
         self.render_options.first_render = True
-        self.map.init_random()
+        self.init_map_and_sweeper(sweeper_config=self.sweeper_config, resolution=self.resolution)
         self.map.cleaning_path = []
         self.stats.area_empty = self.map.get_empty_area(resolution=self.resolution)
 
@@ -532,6 +532,7 @@ class SweeperEnv(gym.Env):
             if event.key == pygame.K_a:
                 self.render_options.show_area = not self.render_options.show_area
                 self.render_options.first_render = True
+                self.map.generate_image(self.render_options)
             if event.key == pygame.K_v:
                 self.render_options.show_velocity = not self.render_options.show_velocity
             if event.key == pygame.K_d:
@@ -554,7 +555,7 @@ if __name__ == "__main__":
 
     # Implements a random agent for our gym environment
     sweeper_config = SweeperConfig()
-    env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 5.0, debug=False)
+    env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 2.0, debug=False)
     observation = env.reset()
     rewards = []
     cum_rewards = []
