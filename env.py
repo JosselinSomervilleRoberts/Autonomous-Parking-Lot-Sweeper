@@ -14,13 +14,13 @@ from map import Map
 @dataclass
 class SweeperConfig:
     """Configuration for the sweeper speed."""
-    acceleration_range      : Tuple[float, float] = (-100, 100) # units/s**2
-    velocity_range          : Tuple[float, float] = (-3, 3)     # units/s
+    acceleration_range      : Tuple[float, float] = (-60, 60)   # units/s**2
+    velocity_range          : Tuple[float, float] = (-6, 12)    # units/s
     steering_angle_range    : Tuple[float, float] = (-200, 200) # degrees/s
     radar_max_distance      : float               = 10          # units
     friction                : float               = 5.0         # 1/s
     sweeper_size            : Tuple[float, float] = (2., 1.)    # units
-    num_radars              : int                 = 16           # number of rays
+    num_radars              : int                 = 16          # number of rays
 
     def scale(self, resolution):
         self.acceleration_range = (self.acceleration_range[0] * resolution, self.acceleration_range[1] * resolution)
@@ -139,6 +139,8 @@ def get_aligned_text_and_value(text, value, nb_char_text=20, nb_char_before_comm
 
 class Sweeper:
     def __init__(self, sweeper_config: SweeperConfig):
+        self.conf = sweeper_config
+
         # Linear
         self.position = np.array([0., 0.])
         self.speed = 0.
@@ -154,12 +156,14 @@ class Sweeper:
 
     def update_position(self, acceleration, steering, dt=1./60.):
         # Set acceleration and steering
-        self.acceleration = acceleration
-        self.angle_speed = steering
+        self.acceleration = max(min(acceleration, self.conf.acceleration_range[1]), self.conf.acceleration_range[0])
+        self.angle_speed = max(min(steering, self.conf.steering_angle_range[1]), self.conf.steering_angle_range[0])
 
         # Update position and angle (Explicit Euler)
         self.speed += self.acceleration * dt
         self.speed *= (1 - self.friction * dt)
+        self.speed = max(min(self.speed, self.conf.velocity_range[1]), self.conf.velocity_range[0])
+        if abs(self.speed) < 0.1: self.speed = 0.
         self.angle += self.angle_speed * dt
         angle = self.angle * np.pi / 180.
         self.position += self.speed * dt * np.array([np.cos(angle), np.sin(angle)])
@@ -175,6 +179,10 @@ class Sweeper:
             [x - w/2 * np.cos(angle) + h/2 * np.sin(angle), y - w/2 * np.sin(angle) - h/2 * np.cos(angle)],
             [x + w/2 * np.cos(angle) + h/2 * np.sin(angle), y + w/2 * np.sin(angle) - h/2 * np.cos(angle)]
         ])
+
+    def get_front_position(self):
+        angle = self.angle * np.pi / 180.
+        return self.position + self.size[0] * 0.5 * np.array([np.cos(angle), np.sin(angle)])
 
     
 class SweeperEnv(gym.Env):
@@ -291,7 +299,9 @@ class SweeperEnv(gym.Env):
             self.sweeper.acceleration = 0.
 
         # Compute reward
-        new_area = self.map.apply_cleaning(self.sweeper.position, width=1.4*self.sweeper.size[1], resolution=self.resolution)
+        # Position of front of sweeper
+        front_position = self.sweeper.get_front_position()
+        new_area = self.map.apply_cleaning(front_position, width=1.6*self.sweeper.size[1], resolution=self.resolution)
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
         reward = self.reward_config.factor_area_cleaned * new_area + self.reward_config.penalty_per_second * dt
         if had_collision:
@@ -400,6 +410,7 @@ class SweeperEnv(gym.Env):
         # Display a circle around the sweeper's center
         if self.render_options.show_sweeper_center:
             pygame.draw.circle(self.screen, self.render_options.sweeper_center_color, self.render_options.cell_size * sweeper_pos, 5)
+            pygame.draw.circle(self.screen, self.render_options.sweeper_center_color, self.render_options.cell_size * self.sweeper.get_front_position(), 3)
 
         # Display velocity vector as an arrow
         if self.render_options.show_velocity:
@@ -454,8 +465,8 @@ class SweeperEnv(gym.Env):
         self.display_value('Sim. speed', self.render_options.simulation_speed, 10, 70, color=(0, 0, 0))
 
         # Display speed, acceleration and angle speed and pygame framerate on the right in dark blue
-        self.display_value('Speed', self.sweeper.speed, int(self.render_options.width * 0.74), 10, color=(0, 0, 255))
-        self.display_value('Acceleration', self.sweeper.acceleration, int(self.render_options.width * 0.74), 30, color=(0, 0, 255))
+        self.display_value('Speed', self.sweeper.speed / self.resolution, int(self.render_options.width * 0.74), 10, color=(0, 0, 255))
+        self.display_value('Acceleration', self.sweeper.acceleration / self.resolution, int(self.render_options.width * 0.74), 30, color=(0, 0, 255))
         self.display_value('Angle speed', self.sweeper.angle_speed, int(self.render_options.width * 0.74), 50, color=(0, 0, 255))
 
         # Display pygame framerate in dark green
@@ -464,7 +475,7 @@ class SweeperEnv(gym.Env):
 
         # Display time, area cleaned, percentage of the map cleaned and number of collisions in the middle in dark red
         self.display_value('Time', self.stats.time, int(self.render_options.width * 0.37), 10, color=(255, 0, 0))
-        self.display_value('Area cleaned', self.stats.area_cleaned, int(self.render_options.width * 0.37), 30, color=(255, 0, 0))
+        self.display_value('Area / seconds', self.stats.area_cleaned / self.stats.time, int(self.render_options.width * 0.37), 30, color=(255, 0, 0))
         self.display_value('Perc. cleaned', self.stats.percentage_cleaned, int(self.render_options.width * 0.37), 50, color=(255, 0, 0))
         self.display_value('Num. collisions', self.stats.collisions, int(self.render_options.width * 0.37), 70, color=(255, 0, 0))
 
@@ -543,7 +554,7 @@ if __name__ == "__main__":
 
     # Implements a random agent for our gym environment
     sweeper_config = SweeperConfig()
-    env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 2.0, debug=False)
+    env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 5.0, debug=False)
     observation = env.reset()
     rewards = []
     cum_rewards = []

@@ -40,6 +40,14 @@ class Map:
             var_size_obstacles=0.1 * self.width
         )
 
+        # Fill the border with obstacles
+        for x in range(self.width):
+            self.grid[x, 0] = 1
+            self.grid[x, self.height - 1] = 1
+        for y in range(self.height):
+            self.grid[0, y] = 1
+            self.grid[self.width - 1, y] = 1
+
 
     def generate_random(self, nb_obstacles, avg_size_obstacles, var_size_obstacles):
         # First fill the map with obstacles
@@ -83,7 +91,7 @@ class Map:
             if not patch.is_empty:
                 count = self.fill_polygon_for_cleaning(patch, 2)
                 self.cleaning_path = [self.cleaning_path[-1]]
-                return count / resolution
+                return count / resolution**2
         return 0
 
     def fill_polygon_for_cleaning(self, polygon: Polygon, value: int):
