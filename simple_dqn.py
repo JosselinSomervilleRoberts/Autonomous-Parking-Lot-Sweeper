@@ -210,7 +210,7 @@ num_episodes = args.num_episodes
 log_every = args.log_every
 
 
-for i_episode in tqdm(range(num_episodes), desc="Episode", disable=log_every == 0):
+for i_episode in tqdm(range(num_episodes), desc="Episode", disable=log_every != 0, smoothing=0):
     # Initialize the environment and get it's state
     new_map = args.reset_map_every > 0 and i_episode % args.reset_map_every == 0
     state, info = env.reset(new_map=new_map)
