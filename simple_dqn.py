@@ -199,13 +199,13 @@ def optimize_model():
 
 
 if torch.cuda.is_available():
-    num_episodes = 600
+    num_episodes = 500
 else:
     num_episodes = 50
 
 for i_episode in range(num_episodes):
     # Initialize the environment and get it's state
-    state, info = env.reset()
+    state, info = env.reset(new_map=(i_episode == 0))
     state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
     for t in count():
         action = select_action(state)
@@ -244,3 +244,50 @@ print('Complete')
 plot_durations(show_result=True)
 plt.ioff()
 plt.show()
+
+# Save the model
+torch.save(policy_net.state_dict(), 'model.pth')
+
+# Show the final result
+# Set render to True to see the final result
+env.render_options.render = True
+env.init_pygame()
+import pygame, sys
+clock = pygame.time.Clock()
+
+while True:
+
+    # Initialize the environment and get it's state
+    state, info = env.reset(new_map=False)
+    state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+
+    for t in count():
+
+        # Break if the user closes the window
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                pygame.quit()
+                sys.exit()
+            env.process_pygame_event(event)
+
+        # Frame rate
+        clock.tick(60)
+
+        action = select_action(state)
+        observation, reward, terminated, truncated, _ = env.step(action.item())
+        reward = torch.tensor([reward], device=device)
+        done = terminated or truncated
+
+        if terminated:
+            next_state = None
+        else:
+            next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+
+        # Move to the next state
+        state = next_state
+
+        # Render the environment
+        env.render()
+
+        if done:
+            break

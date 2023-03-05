@@ -156,7 +156,7 @@ class SweeperEnv(gym.Env):
         self.observation_space = None # TODO
 
 
-    def init_map_and_sweeper(self, sweeper_config: SweeperConfig, resolution: float = 1) -> None:
+    def init_map_and_sweeper(self, sweeper_config: SweeperConfig, resolution: float = 1, new_map: bool = True) -> None:
         GAME_WIDTH, GAME_HEIGHT = 50, 50
         self.render_options.cell_size = int(round(16 / resolution))
         self.render_options.first_render = True
@@ -166,8 +166,11 @@ class SweeperEnv(gym.Env):
         self.render_options.height = map_height * self.render_options.cell_size
 
         # Create map
-        self.map = Map(map_width, map_height)
-        self.map.init_random(self.render_options)
+        if new_map:
+            self.map = Map(map_width, map_height)
+            self.map.init_random(self.render_options)
+        else:
+            self.map.clear()
 
         # Create sweeper
         self.sweeper = Sweeper(sweeper_config)
@@ -287,14 +290,14 @@ class SweeperEnv(gym.Env):
     def check_collision(self):
         return self.map.check_collision(self.sweeper.get_bounding_box())
 
-    def reset(self, *args):
+    def reset(self, new_map=True, *args):
         """Reset the environment and return an initial observation and info."""
         self.iter = 0
         self.stats = SweeperStats()
 
         # Reset map
         self.render_options.first_render = True
-        self.init_map_and_sweeper(sweeper_config=self.sweeper_config, resolution=self.resolution)
+        self.init_map_and_sweeper(sweeper_config=self.sweeper_config, resolution=self.resolution, new_map=new_map)
         self.map.cleaning_path = []
         self.stats.area_empty = self.map.get_empty_area(resolution=self.resolution)
 

@@ -35,6 +35,7 @@ class Map:
 
     def init_random(self, render_options):
         # Call generate_random with random parameters
+        self.render_options = render_options
         self.generate_random(
             nb_obstacles=random.randint(5, 10),
             avg_size_obstacles=0.2 * self.width,
@@ -52,6 +53,15 @@ class Map:
         # Generates an image of the map
         if render_options.render:
             self.generate_image(render_options)
+
+    def clear(self):
+        # Keeps the obstacles but clears the cleaned tiles
+        self.grid[self.grid==2] = 0
+        if self.render_options.render:
+            self.generate_image(self.render_options)
+        self.cleaning_path = []
+        self.cleaned_cells_to_display = []
+        
 
     def generate_image(self, render_options):
         """Generates an image of the map"""
