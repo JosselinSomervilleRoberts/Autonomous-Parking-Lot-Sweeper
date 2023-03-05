@@ -1,44 +1,43 @@
 import pygame
 import numpy as np
 import shapely.geometry as geom
-
+from map import Map
 
 class SweeperGame:
-    def __init__(self, grid, sweeper, width=1600, height=800):
+
+    def __init__(self, width, height, sweeper, cell_size):
+        # Init pygame
         pygame.init()
-        self.screen = pygame.display.set_mode((width, height))
+        pygame.display.set_caption('Sweeper Environment')
+        self.cell_size = cell_size
+        self.screen = pygame.display.set_mode((width * cell_size, height * cell_size))
         self.clock = pygame.time.Clock()
-        self.carImg = pygame.transform.scale(pygame.image.load('assets/car.png'), sweeper.size)
         screen_size = np.array(self.screen.get_size())
         self.screen_center = screen_size / 2
-        self.grid = pygame.surfarray.make_surface(grid)
-        self.scale = screen_size / np.array(self.grid.get_size())
-        print(self.grid.get_size())
-        self.grid = pygame.transform.scale(self.grid, (width, height))
+
+        # Init map
+        self.map = Map(width, height)
+
+        # Init sweeper
+        self.carImg = pygame.transform.scale(pygame.image.load('assets/car.png'), sweeper.size)
 
     def fill_shapely_outline(self, input, color=(0,0,0)):
         x, y = input.xy
         outline = [[x[i], y[i]] for i in range(len(x))]
-        pygame.draw.polygon(self.screen, color, self.scale * np.array(outline))
+        pygame.draw.polygon(self.screen, color, self.cell_size * np.array(outline))
 
     def render(self, sweeper_pos, sweeper_angle, path, patch):
-        # Fills the screen with white
-        self.screen.fill((255, 255, 255))
-        self.screen.blit(self.grid, (0, 0))
-
-        # Draw the sweeper's area
-        if isinstance(patch, geom.polygon.Polygon):
-            self.fill_shapely_outline(patch.exterior, (0,255,0))
-            for interior in patch.interiors:
-                self.fill_shapely_outline(interior, (0,0,0))
+        # Render map
+        self.map.display(self.screen, self.cell_size)
 
         # Draw the sweeper's path
-        pygame.draw.lines(self.screen, (0,0,255), False, self.scale * np.array(path), width=2)
+        pygame.draw.lines(self.screen, (0,0,255), False, self.cell_size * np.array(path), width=2)
 
         # Draw the sweeper
         carImg_temp = pygame.transform.rotate(self.carImg, -sweeper_angle)
         carImg_rotated_rect = carImg_temp.get_rect()
-        carImg_rotated_rect.center = sweeper_pos * self.scale
+        carImg_rotated_rect.center = sweeper_pos * self.cell_size
         self.screen.blit(carImg_temp, carImg_rotated_rect)
+
         # Updates the screen
         pygame.display.flip()

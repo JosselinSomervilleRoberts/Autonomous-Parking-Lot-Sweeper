@@ -59,7 +59,7 @@ class SweeperEnv(gym.Env):
     ACTION_INDEX_ACCELERATION = 0
     ACTION_INDEX_STEERING = 1
 
-    def __init__(self, config : SweeperConfig, map_fname : str):
+    def __init__(self, config : SweeperConfig):
         # Extract from config
         accel_low, accel_high = config.acceleration_range
         steer_low, steer_high = config.steering_angle_range
@@ -93,15 +93,11 @@ class SweeperEnv(gym.Env):
         self.sweeper = Sweeper(config)
         self.sweeper_positions = [[self.sweeper.position[0], self.sweeper.position[1]]]
 
-        # Create the grid from the png
-        img = Image.open(map_fname).convert("RGB")
-        self.grid = np.array(img)
+        # Game
+        self.game = SweeperGame(width=100, height=100, sweeper=self.sweeper, cell_size=8)
 
         # Reset
         self.reset()
-
-        # Game
-        self.game = SweeperGame(grid=self.grid, width=1.5*self.grid.shape[0], height=1.5*self.grid.shape[1], sweeper=self.sweeper)
 
     def _get_observation(self):
         return [self.sweeper.position[0], self.sweeper.position[1]]
@@ -130,15 +126,12 @@ class SweeperEnv(gym.Env):
         return self._get_observation(), reward, False, False, {"collision": False}
 
     def check_collision(self, prev_position, curr_position):
-        lower_x = min(int(prev_position[0]), int(curr_position[0]))
-        higher_x = max(ceil(prev_position[0]), ceil(curr_position[0]))
-        left_y = min(int(prev_position[1]), int(curr_position[1]))
-        right_y = max(ceil(prev_position[1]), ceil(curr_position[1]))
-        return not (np.all(self.grid[lower_x:higher_x+1,left_y:right_y+1,:] == [0, 0, 0]))
+        return False
 
     def reset(self, *args):
         # Returns observation
         self.iter = 0
+        self.game.map.init_random()
 
     def render(self):
         self.game.render(self.sweeper.position, self.sweeper.angle, self.sweeper_positions, self.patch)
@@ -156,7 +149,7 @@ if __name__ == "__main__":
         friction=0.1*6,                        # 1/s
         sweeper_size=(50, 25)                   # units
     )
-    env = SweeperEnv(config=config, map_fname="assets/map1-small.png")
+    env = SweeperEnv(config=config)
     observation = env.reset()
     rewards = []
     cum_rewards = []
