@@ -27,9 +27,9 @@ class SweeperGame:
         outline = [[x[i], y[i]] for i in range(len(x))]
         pygame.draw.polygon(self.screen, color, self.cell_size * np.array(outline))
 
-    def render(self, path=None):
+    def render(self, render_all=False, path=None):
         # Render map
-        self.map.display(self.screen, self.cell_size)
+        self.map.display(self.screen, self.cell_size, self.sweeper, rerender=render_all)
 
         # Draw the sweeper's path
         if path is not None:

@@ -126,17 +126,35 @@ class Map:
         return np.argwhere(self.grid == 0)
 
 
-    def display(self, screen: pygame.Surface, tile_size: int, cleaned_color: Tuple[int, int, int]=(0,255,0), obstacle_color: Tuple[int, int, int]=(0,0,0), empty_color: Tuple[int, int, int]=(255,255,255)):
-        # Fill screen with obstacle color
-        screen.fill(obstacle_color)
-        
-        # Display cleaned tiles
-        for x, y in self.get_cleaned_tiles():
-            pygame.draw.rect(screen, cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+    def display(self, screen: pygame.Surface, tile_size: int, sweeper = None, rerender: bool = False, cleaned_color: Tuple[int, int, int]=(0,255,0), obstacle_color: Tuple[int, int, int]=(0,0,0), empty_color: Tuple[int, int, int]=(255,255,255)):
+        # Redraw everything
+        if rerender:
+            # Fill screen with obstacle color
+            screen.fill(obstacle_color)
+            
+            # Display cleaned tiles
+            for x, y in self.get_cleaned_tiles():
+                pygame.draw.rect(screen, cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
-        # Display empty tiles
-        for x, y in self.get_empty_tiles():
-            pygame.draw.rect(screen, empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+            # Display empty tiles
+            for x, y in self.get_empty_tiles():
+                pygame.draw.rect(screen, empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+        else:
+            # Update only around the sweeper
+            # Get bounding box
+            SWEEPER_SIZE_FACTOR = 1.5
+            bounding_box = sweeper.get_bounding_box(factor=SWEEPER_SIZE_FACTOR)
+            x_min, y_min = np.floor(bounding_box.min(axis=0)).astype(int)
+            x_max, y_max = np.ceil(bounding_box.max(axis=0)).astype(int)
+            for x in range(x_min, x_max+1):
+                for y in range(y_min, y_max+1):
+                    if self.grid[x, y] == 0:
+                        pygame.draw.rect(screen, empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                    elif self.grid[x, y] == 1:
+                        pygame.draw.rect(screen, obstacle_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                    elif self.grid[x, y] == 2:
+                        pygame.draw.rect(screen, cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+
 
     def clean(self, rect: Polygon):
         # Get bounding box

@@ -53,10 +53,10 @@ class Sweeper:
         angle = self.angle * np.pi / 180.
         self.position += self.speed * dt * np.array([np.cos(angle), np.sin(angle)])
 
-    def get_bounding_box(self):
+    def get_bounding_box(self, factor = 1.):
         # Get bounding box of the sweeper (the position is the center of the sweeper)
         x, y = self.position
-        w, h = self.size
+        w, h = self.size * factor
         angle = self.angle * np.pi / 180.
         return np.array([
             [x + w/2 * np.cos(angle) - h/2 * np.sin(angle), y + w/2 * np.sin(angle) + h/2 * np.cos(angle)],
@@ -106,7 +106,7 @@ class SweeperEnv(gym.Env):
         self.sweeper_positions = [[self.sweeper.position[0], self.sweeper.position[1]]]
 
         # Game
-        self.game = SweeperGame(width=128, height=128, sweeper=self.sweeper, cell_size=6)
+        self.game = SweeperGame(width=256, height=256, sweeper=self.sweeper, cell_size=3)
 
         # Reset
         self.reset()
@@ -160,6 +160,8 @@ class SweeperEnv(gym.Env):
 
     def reset(self, *args):
         # Returns observation
+
+        self.first_render = True
         self.iter = 0
         self.game.map.init_random()
 
@@ -175,7 +177,8 @@ class SweeperEnv(gym.Env):
         self.sweeper.angle_speed = 0
 
     def render(self):
-        self.game.render()#self.sweeper.position, self.sweeper.angle, self.sweeper_positions, self.patch)
+        self.game.render(render_all=self.first_render)
+        self.first_render = False
 
 
 if __name__ == "__main__":
