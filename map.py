@@ -38,9 +38,9 @@ class Map:
     def init_random(self):
         # Call generate_random with random parameters
         self.generate_random(
-            nb_obstacles=5,
-            avg_size_obstacles=20,
-            var_size_obstacles=3
+            nb_obstacles=random.randint(5, 10),
+            avg_size_obstacles=0.2 * self.width,
+            var_size_obstacles=0.1 * self.width
         )
 
 
@@ -99,21 +99,20 @@ class Map:
         if x_max < 0 or y_max < 0 or x_min >= self.grid.shape[0] or y_min >= self.grid.shape[1]:
             return False
         
-        # Check if any of the four points of the rectangle are obstacles
-        for point in rectangle.astype(int):
-            if self.grid[point[0], point[1]] == 1:
-                return True
+        # Check if the rectangle is completely inside the grid
+        if np.all(self.grid[x_min:x_max+1, y_min:y_max+1] == 0):
+            return False 
         
-        # Check if the rectangle completely covers an obstacle cell
-        if np.all(self.grid[x_min:x_max+1, y_min:y_max+1] == 1):
-            return True
-        
-        # Check if any obstacle cell is inside the rectangle
-        for i in range(x_min, x_max+1):
-            for j in range(y_min, y_max+1):
-                if self.grid[i, j] == 1 and ((i, j) not in rectangle.astype(int)):
-                    return True
-        
+        # Check if any obstacle cell is inside the rectangle (slow)
+        # The rectangle is a numpy array of shape (4, 2)
+        poly_rect = Polygon(rectangle)
+        for x in range(x_min, x_max+1):
+            for y in range(y_min, y_max+1):
+                if self.grid[x, y] == 1:
+                    # Check if the cell is inside the rectangle
+                    if Point(x, y).within(poly_rect):
+                        return True
+
         # No collision found
         return False
 

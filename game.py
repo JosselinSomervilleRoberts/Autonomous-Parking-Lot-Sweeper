@@ -35,13 +35,21 @@ class SweeperGame:
         if path is not None:
             pygame.draw.lines(self.screen, (0,0,255), False, self.cell_size * np.array(path), width=2)
 
-        # Draw the sweeper
+        # Draw the sweeper (seeper_pos is the center of the sweeper)
         sweeper_pos = self.sweeper.position
         sweeper_angle = self.sweeper.angle
         carImg_temp = pygame.transform.rotate(self.carImg, -sweeper_angle)
         carImg_rotated_rect = carImg_temp.get_rect()
         carImg_rotated_rect.center = sweeper_pos * self.cell_size
         self.screen.blit(carImg_temp, carImg_rotated_rect)
+
+        # Draw bounding box of sweeper (a np.array of 4 points)
+        sweeper_bbox = self.sweeper.get_bounding_box()
+        pygame.draw.lines(self.screen, (255,0,0), True, self.cell_size * sweeper_bbox, width=2)
+
+        # Display a circle around the sweeper's center
+        pygame.draw.circle(self.screen, (0,255,0), self.cell_size * sweeper_pos, 5)
+
 
         # Updates the screen
         pygame.display.flip()
