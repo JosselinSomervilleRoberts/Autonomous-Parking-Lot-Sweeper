@@ -74,19 +74,19 @@ class Map:
         for obstacle in obstacles:
             self.fill_polygon(obstacle, 1)
 
-    def apply_cleaning(self, cur_pos):
+    def apply_cleaning(self, cur_pos, width=1.0, resolution=1.0):
         # Get the line between the two positions
         self.cleaning_path.append(cur_pos)
         if len(self.cleaning_path) >= 2:
-            patch = get_patch_of_line(self.cleaning_path, width=5, resolution=16)
+            patch = get_patch_of_line(self.cleaning_path, width=width, resolution=16)
             # If polygon is not empty, fill it
             if not patch.is_empty:
-                count = self.fill_polygon(patch, 2)
+                count = self.fill_polygon_for_cleaning(patch, 2)
                 self.cleaning_path = [self.cleaning_path[-1]]
-                return count
+                return count / resolution
         return 0
 
-    def fill_polygon(self, polygon: Polygon, value: int):
+    def fill_polygon_for_cleaning(self, polygon: Polygon, value: int):
         # Get bounding box
         min_x = max(0, int(polygon.bounds[0]))
         min_y = max(0, int(polygon.bounds[1]))
@@ -97,10 +97,23 @@ class Map:
         count = 0
         for x in range(min_x, max_x):
             for y in range(min_y, max_y):
-                if self.grid[x, y] != value and polygon.contains(Point(x, y)):
+                if self.grid[x, y] == 0 and polygon.contains(Point(x, y)):
                     self.grid[x, y] = value
                     count += 1
         return count
+
+    def fill_polygon(self, polygon: Polygon, value: int):
+        # Get bounding box
+        min_x = max(0, int(polygon.bounds[0]))
+        min_y = max(0, int(polygon.bounds[1]))
+        max_x = min(self.width, int(polygon.bounds[2]))
+        max_y = min(self.height, int(polygon.bounds[3]))
+
+        # Fill in polygon
+        for x in range(min_x, max_x):
+            for y in range(min_y, max_y):
+                if self.grid[x, y] != value and polygon.contains(Point(x, y)):
+                    self.grid[x, y] = value
 
     def check_collision(self, rectangle: np.ndarray) -> bool:
         # Convert the coordinates to integers
@@ -118,8 +131,8 @@ class Map:
         # Check if any obstacle cell is inside the rectangle (slow)
         # The rectangle is a numpy array of shape (4, 2)
         poly_rect = Polygon(rectangle)
-        for x in range(x_min, x_max+1):
-            for y in range(y_min, y_max+1):
+        for x in range(max(0,x_min), min(self.width, x_max+1)):
+            for y in range(max(0,y_min), min(self.height, y_max+1)):
                 if self.grid[x, y] == 1:
                     # Check if the cell is inside the rectangle
                     if Point(x, y).within(poly_rect):
@@ -138,32 +151,35 @@ class Map:
         return np.argwhere(self.grid == 0)
 
 
-    def display(self, screen: pygame.Surface, tile_size: int, sweeper = None, rerender: bool = False, cleaned_color: Tuple[int, int, int]=(0,255,0), obstacle_color: Tuple[int, int, int]=(0,0,0), empty_color: Tuple[int, int, int]=(255,255,255)):
+    def display(self, sweeper, screen, render_options, rerender=False):
+        tile_size = render_options.cell_size
         # Redraw everything
         if rerender:
             # Fill screen with obstacle color
-            screen.fill(obstacle_color)
+            screen.fill(render_options.cell_obstacle_color)
             
             # Display cleaned tiles
             for x, y in self.get_cleaned_tiles():
-                pygame.draw.rect(screen, cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                color = render_options.cell_cleaned_color if render_options.show_area else render_options.cell_empty_color
+                pygame.draw.rect(screen, color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
             # Display empty tiles
             for x, y in self.get_empty_tiles():
-                pygame.draw.rect(screen, empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                pygame.draw.rect(screen, render_options.cell_empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
         else:
             # Update only around the sweeper
             # Get bounding box
-            SWEEPER_SIZE_FACTOR = 1.5
+            SWEEPER_SIZE_FACTOR = 1.8 * max(1., render_options.simulation_speed)
             bounding_box = sweeper.get_bounding_box(factor=SWEEPER_SIZE_FACTOR)
             x_min, y_min = np.floor(bounding_box.min(axis=0)).astype(int)
             x_max, y_max = np.ceil(bounding_box.max(axis=0)).astype(int)
-            for x in range(x_min, x_max+1):
-                for y in range(y_min, y_max+1):
+            cleaned_color = render_options.cell_cleaned_color if render_options.show_area else render_options.cell_empty_color
+            for x in range(max(0,x_min), min(self.width, x_max+1)):
+                for y in range(max(0,y_min), min(self.height, y_max+1)):
                     if self.grid[x, y] == 0:
-                        pygame.draw.rect(screen, empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                        pygame.draw.rect(screen, render_options.cell_empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
                     elif self.grid[x, y] == 1:
-                        pygame.draw.rect(screen, obstacle_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                        pygame.draw.rect(screen, render_options.cell_obstacle_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
                     elif self.grid[x, y] == 2:
                         pygame.draw.rect(screen, cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
@@ -180,6 +196,12 @@ class Map:
             for y in range(min_y, max_y):
                 if rect.contains(Point(x, y)):
                     self.grid[x, y] = 2
+
+    def get_cleaned_area(self, resolution=1.0) -> float:
+        return len(self.get_cleaned_tiles()) / resolution
+
+    def get_empty_area(self, resolution=1.0) -> float:
+        return len(self.get_empty_tiles()) / resolution
 
 
 if __name__ == "__main__":
