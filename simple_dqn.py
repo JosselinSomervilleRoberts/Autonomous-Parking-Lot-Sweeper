@@ -15,8 +15,8 @@ from env import SweeperEnv
 from config import SweeperConfig, RewardConfig, RenderOptions
 
 # Create the environment
-sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-minimum')
-reward_config = RewardConfig(done_on_collision=True)
+sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-minimum', num_max_steps=1000)
+reward_config = RewardConfig(done_on_collision=True, penalty_per_second=-5.0)
 render_options = RenderOptions(render=False)
 env = SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False)
 
@@ -197,15 +197,23 @@ def optimize_model():
     torch.nn.utils.clip_grad_value_(policy_net.parameters(), 100)
     optimizer.step()
 
+import argparse
+import numpy as np
+from tqdm import tqdm
+parser = argparse.ArgumentParser()
+parser.add_argument("--num_episodes", type=int, default=100)
+parser.add_argument("--log_every", type=int, default=0)
+parser.add_argument("--plot", action="store_true")
+parser.add_argument("--reset_map_every", type=int, default=0)
+args = parser.parse_args()
+num_episodes = args.num_episodes
+log_every = args.log_every
 
-if torch.cuda.is_available():
-    num_episodes = 500
-else:
-    num_episodes = 50
 
-for i_episode in range(num_episodes):
+for i_episode in tqdm(range(num_episodes), desc="Episode", disable=log_every == 0):
     # Initialize the environment and get it's state
-    state, info = env.reset(new_map=(i_episode == 0))
+    new_map = args.reset_map_every > 0 and i_episode % args.reset_map_every == 0
+    state, info = env.reset(new_map=new_map)
     state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
     cum_reward = 0
     for t in count():
@@ -239,8 +247,11 @@ for i_episode in range(num_episodes):
 
         if done:
             episode_rewards.append(cum_reward)
-            plot_rewards()
+            if args.plot: plot_rewards()
             break
+    if log_every > 0 and i_episode % log_every == 0:
+        print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
+            i_episode, episode_rewards[-1], np.mean(episode_rewards[-log_every:])))
 
 print('Complete')
 plot_rewards(show_result=True)

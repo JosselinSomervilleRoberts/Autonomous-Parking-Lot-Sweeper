@@ -216,11 +216,11 @@ class SweeperEnv(gym.Env):
                 7: (0, self.sweeper_config.steering_angle_range[1]),
                 8: (self.sweeper_config.acceleration_range[0], self.sweeper_config.steering_angle_range[1]),
             }[action]
-        elif sweeper_config.action_type == "discrete" \
-            or "-" in sweeper_config.action_type and sweeper_config.action_type.split("-")[0] == "discrete":
+        elif self.sweeper_config.action_type == "discrete" \
+            or "-" in self.sweeper_config.action_type and self.sweeper_config.action_type.split("-")[0] == "discrete":
             nb_discretization = 10
-            if "-" in sweeper_config.action_type:
-                nb_discretization = int(sweeper_config.action_type.split("-")[1])
+            if "-" in self.sweeper_config.action_type:
+                nb_discretization = int(self.sweeper_config.action_type.split("-")[1])
             # Discritize the action space in nb_discretization^2
             return lambda action: (
                 np.interp(action[0], [0, nb_discretization-1], [self.sweeper_config.acceleration_range[0], self.sweeper_config.acceleration_range[1]]),
