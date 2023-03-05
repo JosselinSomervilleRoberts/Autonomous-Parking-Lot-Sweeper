@@ -71,7 +71,10 @@ class SweeperEnv(gym.Env):
     ACTION_INDEX_ACCELERATION = 0
     ACTION_INDEX_STEERING = 1
 
-    def __init__(self, config : SweeperConfig):
+    def __init__(self, config : SweeperConfig, debug=False, needs_rendering=True):
+        self.debug = debug
+        self.needs_rendering = needs_rendering
+
         # Extract from config
         accel_low, accel_high = config.acceleration_range
         steer_low, steer_high = config.steering_angle_range
@@ -129,7 +132,7 @@ class SweeperEnv(gym.Env):
         # If there is one, find with a binary search the last position where there was no collision
         if self.check_collision():
             collision_position = self.sweeper.position.copy()
-            print("Collision at", collision_position, "from", prev_position, "with action", action)
+            if self.debug: print("Collision at", collision_position, "from", prev_position, "with action", action)
             # Binary search between prev_position and collision_position
             N_BINARY_SEARCH = 10
             fmin, fmax = 0., 1.
@@ -148,10 +151,9 @@ class SweeperEnv(gym.Env):
             return self._get_observation(), -10, False, False, {"collision": True}
 
         # Compute reward
+        area = self.game.map.apply_cleaning(self.sweeper.position)
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
-        self.patch = get_patch_of_line(self.sweeper_positions, width=0.7*self.sweeper.size[1])
-        area = self.patch.area
-        reward = area - self.curr_covered_area - self.reward_iter_penalty
+        reward = area - self.reward_iter_penalty
         self.curr_covered_area = area
         return self._get_observation(), reward, False, False, {"collision": False}
 
@@ -160,7 +162,7 @@ class SweeperEnv(gym.Env):
 
     def reset(self, *args):
         # Returns observation
-
+        self.game.map.cleaning_path = []
         self.first_render = True
         self.iter = 0
         self.game.map.init_random()

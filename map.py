@@ -16,17 +16,13 @@
 # axis aligned bounding box of the rectangle is colliding with the map. If it is, then
 # a second pass is done to check if the rotated rectangle is colliding with the map.
 
+from typing import Tuple, List
+from shapely.geometry import Polygon, Point, LineString
+from random_shape import get_random_shapely_outline
+from metrics import get_patch_of_line
 import numpy as np
 import random
-import math
-import cv2
-from PIL import Image
-from shapely.geometry import Polygon, Point, LineString, MultiLineString, MultiPoint, MultiPolygon
-from shapely.affinity import rotate, translate
-from shapely.ops import cascaded_union
-from typing import Tuple, List
 import pygame
-from random_shape import get_random_shapely_outline
 
 class Map:
 
@@ -34,6 +30,7 @@ class Map:
         self.width = width
         self.height = height
         self.grid = np.zeros((width, height), dtype=np.int8)
+        self.cleaning_path = []
 
     def init_random(self):
         # Call generate_random with random parameters
@@ -77,6 +74,18 @@ class Map:
         for obstacle in obstacles:
             self.fill_polygon(obstacle, 1)
 
+    def apply_cleaning(self, cur_pos):
+        # Get the line between the two positions
+        self.cleaning_path.append(cur_pos)
+        if len(self.cleaning_path) >= 2:
+            patch = get_patch_of_line(self.cleaning_path, width=5, resolution=16)
+            # If polygon is not empty, fill it
+            if not patch.is_empty:
+                count = self.fill_polygon(patch, 2)
+                self.cleaning_path = [self.cleaning_path[-1]]
+                return count
+        return 0
+
     def fill_polygon(self, polygon: Polygon, value: int):
         # Get bounding box
         min_x = max(0, int(polygon.bounds[0]))
@@ -85,10 +94,13 @@ class Map:
         max_y = min(self.height, int(polygon.bounds[3]))
 
         # Fill in polygon
+        count = 0
         for x in range(min_x, max_x):
             for y in range(min_y, max_y):
-                if polygon.contains(Point(x, y)):
+                if self.grid[x, y] != value and polygon.contains(Point(x, y)):
                     self.grid[x, y] = value
+                    count += 1
+        return count
 
     def check_collision(self, rectangle: np.ndarray) -> bool:
         # Convert the coordinates to integers
