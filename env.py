@@ -241,7 +241,18 @@ class SweeperEnv(gym.Env):
         self.sweeper = Sweeper(sweeper_config)
 
     def _get_observation(self):
-        return [self.sweeper.position[0], self.sweeper.position[1]]
+        # Get the observation (copy position, speed, acceleration, angle, steering)
+        # Return as a dict
+        return {
+            "position": self.sweeper.position.copy(),
+            "speed": self.sweeper.speed,
+            "acceleration": self.sweeper.acceleration,
+            "angle": self.sweeper.angle,
+            "steering": self.sweeper.angle_speed,
+            "grid": self.map.grid,
+            "distances": self.radars.copy()
+        }
+
 
     def step(self, action: Tuple[float, float], dt=1./60):
         """Returns (observation, reward, terminated, truncated, info)"""
@@ -287,15 +298,18 @@ class SweeperEnv(gym.Env):
             reward += self.reward_config.penalty_collision
 
         # Radars
-        for i in range(len(self.radars)):
-            radar_angle = self.sweeper.angle + 360. / len(self.radars) * i
-            self.radars[i] = self.map.compute_distance_to_closest_obstacle(self.sweeper.position, radar_angle, int(self.sweeper_config.radar_max_distance * self.resolution))
+        self.compute_radars()
 
         # Update stats
         self.stats.update(new_area=new_area, new_reward=reward, had_collision=had_collision, dt=dt)
 
         # Return observation, reward, terminated, truncated, info
         return self._get_observation(), reward, False, False, {"collision": had_collision}
+
+    def compute_radars(self):
+        for i in range(len(self.radars)):
+            radar_angle = self.sweeper.angle + 360. / len(self.radars) * i
+            self.radars[i] = self.map.compute_distance_to_closest_obstacle(self.sweeper.position, radar_angle, int(self.sweeper_config.radar_max_distance * self.resolution))
 
     def check_collision(self):
         return self.map.check_collision(self.sweeper.get_bounding_box())
@@ -324,7 +338,11 @@ class SweeperEnv(gym.Env):
         self.sweeper_positions = []
         
         # Radars
-        self.radars = np.ones(self.sweeper_config.num_radars) * self.sweeper_config.radar_max_distance
+        self.radars = np.zeros(self.sweeper_config.num_radars)
+        self.compute_radars()
+
+        # Return observation
+        return self._get_observation()
 
 
 
