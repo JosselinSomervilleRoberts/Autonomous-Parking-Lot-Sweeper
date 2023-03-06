@@ -259,7 +259,7 @@ class SweeperEnv(gym.Env):
             collision_position = self.sweeper.position.copy()
             if self.debug: print("Collision at", collision_position, "from", prev_position, "with action", action)
             # Binary search between prev_position and collision_position
-            N_BINARY_SEARCH = 10
+            N_BINARY_SEARCH = 3
             fmin, fmax = 0., 1.
             for _ in range(N_BINARY_SEARCH):
                 fmid = (fmin + fmax) / 2.
@@ -282,6 +282,8 @@ class SweeperEnv(gym.Env):
         reward = self.reward_config.factor_area_cleaned * new_area + self.reward_config.penalty_per_second * dt
         if had_collision:
             reward += self.reward_config.penalty_collision
+        if self.sweeper.speed < 0:
+            reward += self.reward_config.penalty_backwards
 
         # Radars
         self.compute_radars()

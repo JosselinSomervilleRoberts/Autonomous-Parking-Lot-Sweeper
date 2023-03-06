@@ -29,6 +29,7 @@ class RewardConfig:
     factor_area_cleaned     : float = 1.0
     penalty_collision       : float = -100.0
     penalty_per_second      : float = -0.1
+    penalty_backwards       : float = -0.1
     done_on_collision       : bool  = False
 
 
