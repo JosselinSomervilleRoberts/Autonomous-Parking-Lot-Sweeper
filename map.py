@@ -293,14 +293,33 @@ class Map:
         direction = np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
 
         # Compute the distance to the closest obstacle using a step by step approach
+        d = max_distance
         for distance in range(1, max_distance):
             # Check if the next cell is an obstacle
             next_cell = pos + distance * direction
             
             # Round and check if within bounds
-            rounded_cell = [int(round(next_cell[0])), int(round(next_cell[1]))]
+            rounded_cell = [int(next_cell[0]), int(next_cell[1])]
             if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
-                return distance-1
+                d = distance-1
+                break
             if self.grid[rounded_cell[0], rounded_cell[1]] == 1:
-                return distance-1
-        return max_distance
+                d = distance - 1
+                break
+        
+        # If the distance is not max_distance, then we found an obstacle
+        # We refine the value with a binary search
+        if d != max_distance:
+            # Binary search
+            min_distance = d-1
+            max_distance = d+1
+            while max_distance - min_distance > 0.1:
+                d = (min_distance + max_distance) / 2.
+                next_cell = pos + d * direction
+                # Checks if the point is within an obstacle (without rounding)
+                if self.grid[int(next_cell[0]), int(next_cell[1])] == 1:
+                    max_distance = d
+                else:
+                    min_distance = d
+
+        return d
