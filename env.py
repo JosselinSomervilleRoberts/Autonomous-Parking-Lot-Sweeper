@@ -160,7 +160,7 @@ class SweeperEnv(gym.Env):
         self.observation_space = None # TODO
 
 
-    def init_map_and_sweeper(self, sweeper_config: SweeperConfig, resolution: float = 1, new_map: bool = True) -> None:
+    def init_map_and_sweeper(self, sweeper_config: SweeperConfig, resolution: float = 1, new_map: bool = True, generate_new_map: bool = False) -> None:
         GAME_WIDTH, GAME_HEIGHT = 50, 50
         self.render_options.cell_size = int(round(16 / resolution))
         self.render_options.first_render = True
@@ -172,8 +172,10 @@ class SweeperEnv(gym.Env):
         # Create map
         if new_map:
             self.map = Map(map_width, map_height, self.render_options)
-            self.map.load("maps/map_1.npy")
-            #self.map.init_random(self.render_options)
+            if generate_new_map:
+                self.map.init_random()
+            else:
+                self.map.load_random()
         else:
             self.map.clear()
 
@@ -296,14 +298,14 @@ class SweeperEnv(gym.Env):
     def check_collision(self):
         return self.map.check_collision(self.sweeper.get_bounding_box())
 
-    def reset(self, new_map=True, *args):
+    def reset(self, new_map=True, generate_new_map=False, *args):
         """Reset the environment and return an initial observation and info."""
         self.iter = 0
         self.stats = SweeperStats()
 
         # Reset map
         self.render_options.first_render = True
-        self.init_map_and_sweeper(sweeper_config=self.sweeper_config, resolution=self.resolution, new_map=new_map)
+        self.init_map_and_sweeper(sweeper_config=self.sweeper_config, resolution=self.resolution, new_map=new_map, generate_new_map=generate_new_map)
         self.map.cleaning_path = []
         self.stats.area_empty = self.map.get_empty_area(resolution=self.resolution)
 
@@ -461,7 +463,8 @@ class SweeperEnv(gym.Env):
     def process_pygame_event(self, event):
         # Checks for key just pressed
         # - H: displays help (to summarize the keys)
-        # - R: resets the environment
+        # - R: resets the environment on the same map
+        # - T: resets the environment on an other map
         # - Q: quits the program
         # - B: toggles the display of the bounding box
         # - P: toggles the display of the path
@@ -470,6 +473,7 @@ class SweeperEnv(gym.Env):
         # - V: toggles the display of the velocity
         # - D: toggles the display of the debug information
         # - W: toggles the display of the distance sensors
+        # - N: creates a new map
         # - +: increases the speed of the simulation
         # - -: decreases the speed of the simulation
 
@@ -477,12 +481,15 @@ class SweeperEnv(gym.Env):
             if event.key == pygame.K_q:
                 sys.exit()
             if event.key == pygame.K_r:
-                observation = self.reset()
+                observation = self.reset(new_map=False)
+            if event.key == pygame.K_t:
+                observation = self.reset(new_map=True)
             if event.key == pygame.K_h:
                 print("Help")
                 print("----")
                 print("Q: Quit")
-                print("R: Reset")
+                print("R: Reset on same map")
+                print("T: Reset on a another map")
                 print("H: Help")
                 print("B: Toggle bounding box")
                 print("P: Toggle path")
@@ -491,6 +498,7 @@ class SweeperEnv(gym.Env):
                 print("V: Toggle velocity")
                 print("D: Toggle debug")
                 print("W: Toggle distance sensors")
+                print("N: Generate New map")
                 print("+: Increase speed")
                 print("-: Decrease speed")
                 print("Left/Right: Steer")
@@ -515,6 +523,8 @@ class SweeperEnv(gym.Env):
             if event.key == pygame.K_w:
                 self.render_options.show_distance_sensors = not self.render_options.show_distance_sensors
                 self.render_options.first_render = True
+            if event.key == pygame.K_n:
+                self.reset(new_map=True, generate_new_map=True)
             if event.key == pygame.K_EQUALS:
                 self.render_options.simulation_speed *= 2.0
                 print("Speed: " + str(self.render_options.simulation_speed))

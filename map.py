@@ -212,6 +212,16 @@ class Map:
         self.grid = np.load(filename)
         self.clear()
 
+    def load_random(self):
+        len_maps = len(os.listdir("maps/"))
+        if len_maps == 0:
+            print("No maps found in maps/ folder")
+            print("Creating a random map")
+            self.init_random()
+            return
+        i = random.randint(0, len_maps - 1)
+        self.load(f"maps/map_{i}.npy")
+
     def display(self, sweeper, screen, rerender=False):
         tile_size = self.render_options.cell_size
         # Redraw everything
