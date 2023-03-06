@@ -470,20 +470,6 @@ class SweeperEnv(gym.Env):
         # - +: increases the speed of the simulation
         # - -: decreases the speed of the simulation
 
-        # If mouse is pressed, we change the type of the cell
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            if event.button == 1:
-                # Get the position of the mouse
-                mouse_pos = pygame.mouse.get_pos()
-                # Get the cell position
-                cell_pos = (mouse_pos[0] // self.render_options.cell_size, mouse_pos[1] // self.render_options.cell_size)
-                print("Cell position: {}".format(cell_pos))
-                # Change the type of the cell
-                if self.map.grid[cell_pos] == 1:
-                    self.map.set_cell_value(cell_pos[0], cell_pos[1], 0)
-                else:
-                    self.map.set_cell_value(cell_pos[0], cell_pos[1], 1)
-
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_q:
                 sys.exit()
@@ -555,6 +541,22 @@ if __name__ == "__main__":
     while True:
         steering = 0
         acceleration = 0
+
+        # Edit map
+        left, middle, right = pygame.mouse.get_pressed()
+        if left:
+            # Get the position of the mouse
+            mouse_pos = pygame.mouse.get_pos()
+            # Get the cell position
+            cell_pos = (mouse_pos[0] // env.render_options.cell_size, mouse_pos[1] // env.render_options.cell_size)
+            env.map.set_cell_value(cell_pos[0], cell_pos[1], 1)
+        if right:
+            # Get the position of the mouse
+            mouse_pos = pygame.mouse.get_pos()
+            # Get the cell position
+            cell_pos = (mouse_pos[0] // env.render_options.cell_size, mouse_pos[1] // env.render_options.cell_size)
+            env.map.set_cell_value(cell_pos[0], cell_pos[1], 0)
+
 
         # Checks for event to close the window
         for event in pygame.event.get():

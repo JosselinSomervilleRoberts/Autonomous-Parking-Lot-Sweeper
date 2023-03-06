@@ -259,6 +259,7 @@ class Map:
 
     def set_cell_value(self, x, y, value):
         self.grid[x, y] = value
+        self.render_options.first_render = True
 
         # Update the display
         if self.render_options.render:
