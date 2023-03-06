@@ -542,6 +542,7 @@ class SweeperEnv(gym.Env):
 if __name__ == "__main__":
     import pygame
     import sys
+    import time
 
     # Implements a random agent for our gym environment
     sweeper_config = SweeperConfig()
@@ -553,8 +554,8 @@ if __name__ == "__main__":
     positions_list = []
     past_action = (0, 0)
 
-    dt = 1./60
     clock = pygame.time.Clock()
+    last_time_sec = time.time()
 
     while True:
         steering = 0
@@ -602,6 +603,9 @@ if __name__ == "__main__":
         # FILTER = 1 - 0.03 * ACCEL_BY
         # action = (FILTER * past_action[0] + (1 - FILTER) * action[0], FILTER * past_action[1] + (1 - FILTER) * action[1])
         # past_action = action
+        new_time_sec = time.time()
+        dt = new_time_sec - last_time_sec
+        last_time_sec = new_time_sec
         observation, reward, terminated, truncated, info = env.step(action, dt=dt)
         env.render(clock=clock)
         if terminated:
