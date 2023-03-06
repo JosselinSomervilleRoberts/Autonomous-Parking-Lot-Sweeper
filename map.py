@@ -23,19 +23,21 @@ from metrics import get_patch_of_line
 import numpy as np
 import random
 import pygame
+import os
+from config import RenderOptions
 
 class Map:
 
-    def __init__(self, width: int, height: int):
+    def __init__(self, width: int, height: int, render_options: RenderOptions):
+        self.render_options = render_options
         self.width = width
         self.height = height
         self.grid = np.zeros((width, height), dtype=np.int8)
         self.cleaning_path = []
         self.cleaned_cells_to_display = []
 
-    def init_random(self, render_options):
+    def init_random(self):
         # Call generate_random with random parameters
-        self.render_options = render_options
         self.generate_random(
             nb_obstacles=random.randint(5, 10),
             avg_size_obstacles=0.2 * self.width,
@@ -51,35 +53,35 @@ class Map:
             self.grid[self.width - 1, y] = 1
 
         # Generates an image of the map
-        if render_options.render:
-            self.generate_image(render_options)
+        if self.render_options.render:
+            self.generate_image()
 
     def clear(self):
         # Keeps the obstacles but clears the cleaned tiles
         self.grid[self.grid==2] = 0
         if self.render_options.render:
-            self.generate_image(self.render_options)
+            self.generate_image()
         self.cleaning_path = []
         self.cleaned_cells_to_display = []
         
 
-    def generate_image(self, render_options):
+    def generate_image(self):
         """Generates an image of the map"""
         # Create image
         self.image = pygame.Surface(self.grid.shape)
-        self.image.fill(render_options.cell_empty_color)
+        self.image.fill(self.render_options.cell_empty_color)
 
         # Fill in obstacles
-        cleaned_color = render_options.cell_cleaned_color if render_options.show_area else render_options.cell_empty_color
+        cleaned_color = self.render_options.cell_cleaned_color if self.render_options.show_area else self.render_options.cell_empty_color
         for x in range(self.width):
             for y in range(self.height):
                 if self.grid[x, y] == 1:
-                    self.image.set_at((x, y), render_options.cell_obstacle_color)
+                    self.image.set_at((x, y), self.render_options.cell_obstacle_color)
                 if self.grid[x, y] == 2:
                     self.image.set_at((x, y), cleaned_color)
 
         # Scale image
-        self.image = pygame.transform.scale(self.image, (self.width * render_options.cell_size, self.height * render_options.cell_size))
+        self.image = pygame.transform.scale(self.image, (self.width * self.render_options.cell_size, self.height * self.render_options.cell_size))
 
 
     def generate_random(self, nb_obstacles, avg_size_obstacles, var_size_obstacles):
@@ -192,15 +194,32 @@ class Map:
     def get_empty_tiles(self) -> List[Tuple[int, int]]:
         return np.argwhere(self.grid == 0)
 
+    def save(self, filename: str = None):
+        self.clear()
 
-    def display(self, sweeper, screen, render_options, rerender=False):
-        tile_size = render_options.cell_size
+        # If the filename is not specified, map_i is used
+        # where i is the next number available in maps/
+        if filename is None:
+            i = 0
+            while os.path.isfile(f"maps/map_{i}.npy"):
+                i += 1
+            filename = f"maps/map_{i}"
+         
+        # Save numpy array
+        np.save(filename, self.grid)
+
+    def load(self, filename: str):
+        self.grid = np.load(filename)
+        self.clear()
+
+    def display(self, sweeper, screen, rerender=False):
+        tile_size = self.render_options.cell_size
         # Redraw everything
         if rerender:
-            if render_options.show_area:
+            if self.render_options.show_area:
                 # Draw on the image
                 for x, y in self.cleaned_cells_to_display:
-                    pygame.draw.rect(self.image, render_options.cell_cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                    pygame.draw.rect(self.image, self.render_options.cell_cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
             # Displays self.image
             screen.blit(self.image, (0, 0))
@@ -208,19 +227,19 @@ class Map:
         else:
             # Update only around the sweeper
             # Get bounding box
-            SWEEPER_SIZE_FACTOR = 1.8 * max(1., render_options.simulation_speed)
-            if render_options.show_velocity:
+            SWEEPER_SIZE_FACTOR = 1.8 * max(1., self.render_options.simulation_speed)
+            if self.render_options.show_velocity:
                 SWEEPER_SIZE_FACTOR *= 1 + abs(sweeper.speed * 0.04)
             bounding_box = sweeper.get_bounding_box(factor=SWEEPER_SIZE_FACTOR)
             x_min, y_min = np.floor(bounding_box.min(axis=0)).astype(int)
             x_max, y_max = np.ceil(bounding_box.max(axis=0)).astype(int)
-            cleaned_color = render_options.cell_cleaned_color if render_options.show_area else render_options.cell_empty_color
+            cleaned_color = self.render_options.cell_cleaned_color if self.render_options.show_area else self.render_options.cell_empty_color
             for x in range(max(0,x_min), min(self.width, x_max+1)):
                 for y in range(max(0,y_min), min(self.height, y_max+1)):
                     if self.grid[x, y] == 0:
-                        pygame.draw.rect(screen, render_options.cell_empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                        pygame.draw.rect(screen, self.render_options.cell_empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
                     elif self.grid[x, y] == 1:
-                        pygame.draw.rect(screen, render_options.cell_obstacle_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+                        pygame.draw.rect(screen, self.render_options.cell_obstacle_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
                     elif self.grid[x, y] == 2:
                         pygame.draw.rect(screen, cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
@@ -237,6 +256,19 @@ class Map:
             for y in range(min_y, max_y):
                 if rect.contains(Point(x, y)):
                     self.grid[x, y] = 2
+
+    def set_cell_value(self, x, y, value):
+        self.grid[x, y] = value
+
+        # Update the display
+        if self.render_options.render:
+            tile_size = self.render_options.cell_size
+            if value == 0:
+                pygame.draw.rect(self.image, self.render_options.cell_empty_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+            elif value == 1:
+                pygame.draw.rect(self.image, self.render_options.cell_obstacle_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
+            elif value == 2:
+                pygame.draw.rect(self.image, self.render_options.cell_cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
     def get_cleaned_area(self, resolution=1.0) -> float:
         return len(self.get_cleaned_tiles()) / resolution

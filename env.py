@@ -171,8 +171,9 @@ class SweeperEnv(gym.Env):
 
         # Create map
         if new_map:
-            self.map = Map(map_width, map_height)
-            self.map.init_random(self.render_options)
+            self.map = Map(map_width, map_height, self.render_options)
+            self.map.load("maps/map_1.npy")
+            #self.map.init_random(self.render_options)
         else:
             self.map.clear()
 
@@ -351,7 +352,7 @@ class SweeperEnv(gym.Env):
     def render(self, clock: pygame.time.Clock = None):
         # Render map
         if self.render_options.show_path or self.render_options.show_distance_sensors: self.render_options.first_render = True
-        self.map.display(self.sweeper, self.screen, self.render_options, rerender=self.render_options.first_render)
+        self.map.display(self.sweeper, self.screen, rerender=self.render_options.first_render)
         self.render_options.first_render = False
 
         # Draw the sweeper's path (with alpha decreasing with time)
@@ -461,13 +462,27 @@ class SweeperEnv(gym.Env):
         # - Q: quits the program
         # - B: toggles the display of the bounding box
         # - P: toggles the display of the path
-        # - S: toggles the display of the sweeper
+        # - S: saves the map
         # - A: toggles the display of the area
         # - V: toggles the display of the velocity
         # - D: toggles the display of the debug information
         # - W: toggles the display of the distance sensors
         # - +: increases the speed of the simulation
         # - -: decreases the speed of the simulation
+
+        # If mouse is pressed, we change the type of the cell
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            if event.button == 1:
+                # Get the position of the mouse
+                mouse_pos = pygame.mouse.get_pos()
+                # Get the cell position
+                cell_pos = (mouse_pos[0] // self.render_options.cell_size, mouse_pos[1] // self.render_options.cell_size)
+                print("Cell position: {}".format(cell_pos))
+                # Change the type of the cell
+                if self.map.grid[cell_pos] == 1:
+                    self.map.set_cell_value(cell_pos[0], cell_pos[1], 0)
+                else:
+                    self.map.set_cell_value(cell_pos[0], cell_pos[1], 1)
 
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_q:
@@ -482,7 +497,7 @@ class SweeperEnv(gym.Env):
                 print("H: Help")
                 print("B: Toggle bounding box")
                 print("P: Toggle path")
-                print("S: Toggle sweeper")
+                print("S: Save the map")
                 print("A: Toggle area")
                 print("V: Toggle velocity")
                 print("D: Toggle debug")
@@ -499,11 +514,11 @@ class SweeperEnv(gym.Env):
                 self.render_options.show_path = not self.render_options.show_path
                 self.render_options.first_render = True
             if event.key == pygame.K_s:
-                self.render_options.show_sweeper = not self.render_options.show_sweeper
+                self.map.save()
             if event.key == pygame.K_a:
                 self.render_options.show_area = not self.render_options.show_area
                 self.render_options.first_render = True
-                self.map.generate_image(self.render_options)
+                self.map.generate_image()
             if event.key == pygame.K_v:
                 self.render_options.show_velocity = not self.render_options.show_velocity
             if event.key == pygame.K_d:
