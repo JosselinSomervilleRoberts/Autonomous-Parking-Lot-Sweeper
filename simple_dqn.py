@@ -15,8 +15,8 @@ from env import SweeperEnv
 from config import SweeperConfig, RewardConfig, RenderOptions
 
 # Create the environment
-sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-minimum', num_max_steps=1000)
-reward_config = RewardConfig(done_on_collision=True, penalty_per_second=-5.0)
+sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-minimum', num_max_steps=1000, num_radars=8)
+reward_config = RewardConfig(done_on_collision=False, penalty_per_second=-1.0)
 render_options = RenderOptions(render=False)
 env = SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False)
 
@@ -58,15 +58,19 @@ class DQN(nn.Module):
 
     def __init__(self, n_observations, n_actions):
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 128)
-        self.layer2 = nn.Linear(128, 128)
-        self.layer3 = nn.Linear(128, n_actions)
+        self.layer1 = nn.Linear(n_observations, 64)
+        self.dropout1 = nn.Dropout(p=0.2)
+        self.layer2 = nn.Linear(64, 64)
+        self.dropout2 = nn.Dropout(p=0.2)
+        self.layer3 = nn.Linear(64, n_actions)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
     def forward(self, x):
         x = F.relu(self.layer1(x))
+        x = self.dropout1(x)
         x = F.relu(self.layer2(x))
+        x = self.dropout2(x)
         return self.layer3(x)
 
 
@@ -201,7 +205,7 @@ import argparse
 import numpy as np
 from tqdm import tqdm
 parser = argparse.ArgumentParser()
-parser.add_argument("--num_episodes", type=int, default=100)
+parser.add_argument("--num_episodes", type=int, default=500)
 parser.add_argument("--log_every", type=int, default=0)
 parser.add_argument("--plot", action="store_true")
 parser.add_argument("--reset_map_every", type=int, default=0)
@@ -209,49 +213,54 @@ args = parser.parse_args()
 num_episodes = args.num_episodes
 log_every = args.log_every
 
+# Load model if exists
+import os
+if os.path.exists("model.pth"):
+    print("Loading model...")
+    policy_net.load_state_dict(torch.load("model.pth"))
+else:
+    for i_episode in tqdm(range(num_episodes), desc="Episode", disable=log_every != 0, smoothing=0):
+        # Initialize the environment and get it's state
+        new_map = args.reset_map_every > 0 and i_episode % args.reset_map_every == 0
+        state, info = env.reset(new_map=new_map)
+        state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
+        cum_reward = 0
+        for t in count():
+            action = select_action(state)
+            observation, reward, terminated, truncated, _ = env.step(action.item())
+            cum_reward += reward
+            reward = torch.tensor([reward], device=device)
+            done = terminated or truncated
 
-for i_episode in tqdm(range(num_episodes), desc="Episode", disable=log_every != 0, smoothing=0):
-    # Initialize the environment and get it's state
-    new_map = args.reset_map_every > 0 and i_episode % args.reset_map_every == 0
-    state, info = env.reset(new_map=new_map)
-    state = torch.tensor(state, dtype=torch.float32, device=device).unsqueeze(0)
-    cum_reward = 0
-    for t in count():
-        action = select_action(state)
-        observation, reward, terminated, truncated, _ = env.step(action.item())
-        cum_reward += reward
-        reward = torch.tensor([reward], device=device)
-        done = terminated or truncated
+            if terminated:
+                next_state = None
+            else:
+                next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
 
-        if terminated:
-            next_state = None
-        else:
-            next_state = torch.tensor(observation, dtype=torch.float32, device=device).unsqueeze(0)
+            # Store the transition in memory
+            memory.push(state, action, next_state, reward)
 
-        # Store the transition in memory
-        memory.push(state, action, next_state, reward)
+            # Move to the next state
+            state = next_state
 
-        # Move to the next state
-        state = next_state
+            # Perform one step of the optimization (on the policy network)
+            optimize_model()
 
-        # Perform one step of the optimization (on the policy network)
-        optimize_model()
+            # Soft update of the target network's weights
+            # θ′ ← τ θ + (1 −τ )θ′
+            target_net_state_dict = target_net.state_dict()
+            policy_net_state_dict = policy_net.state_dict()
+            for key in policy_net_state_dict:
+                target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
+            target_net.load_state_dict(target_net_state_dict)
 
-        # Soft update of the target network's weights
-        # θ′ ← τ θ + (1 −τ )θ′
-        target_net_state_dict = target_net.state_dict()
-        policy_net_state_dict = policy_net.state_dict()
-        for key in policy_net_state_dict:
-            target_net_state_dict[key] = policy_net_state_dict[key]*TAU + target_net_state_dict[key]*(1-TAU)
-        target_net.load_state_dict(target_net_state_dict)
-
-        if done:
-            episode_rewards.append(cum_reward)
-            if args.plot: plot_rewards()
-            break
-    if log_every > 0 and i_episode % log_every == 0:
-        print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
-            i_episode, episode_rewards[-1], np.mean(episode_rewards[-log_every:])))
+            if done:
+                episode_rewards.append(cum_reward)
+                if args.plot: plot_rewards()
+                break
+        if log_every > 0 and i_episode % log_every == 0:
+            print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
+                i_episode, episode_rewards[-1], np.mean(episode_rewards[-log_every:])))
 
 print('Complete')
 plot_rewards(show_result=True)

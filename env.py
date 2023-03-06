@@ -62,9 +62,13 @@ class Sweeper:
         self.angle_speed = max(min(steering, self.conf.steering_angle_range[1]), self.conf.steering_angle_range[0])
 
         # Update position and angle (Explicit Euler)
+        old_speed = self.speed
         self.speed += self.acceleration * dt
         self.speed *= (1 - self.friction * dt)
         self.speed = max(min(self.speed, self.conf.velocity_range[1]), self.conf.velocity_range[0])
+        # The speed can't change sign
+        if self.speed * old_speed < 0:
+            self.speed = 0
         if abs(self.speed) < 0.1: self.speed = 0.
         self.angle += self.angle_speed * dt
         angle = self.angle * np.pi / 180.
@@ -205,16 +209,17 @@ class SweeperEnv(gym.Env):
         if self.sweeper_config.action_type == "continuous":
             return lambda action: action
         elif self.sweeper_config.action_type == "discrete-minimum":
+            FACTOR = 0.75
             return lambda action: {
-                0: (self.sweeper_config.acceleration_range[1], 0),
+                0: (FACTOR * self.sweeper_config.acceleration_range[1], 0),
                 1: (0, 0),
-                2: (self.sweeper_config.acceleration_range[0], 0),
-                3: (self.sweeper_config.acceleration_range[1], self.sweeper_config.steering_angle_range[0]),
-                4: (0, self.sweeper_config.steering_angle_range[0]),
-                5: (self.sweeper_config.acceleration_range[0], self.sweeper_config.steering_angle_range[0]),
-                6: (self.sweeper_config.acceleration_range[1], self.sweeper_config.steering_angle_range[1]),
-                7: (0, self.sweeper_config.steering_angle_range[1]),
-                8: (self.sweeper_config.acceleration_range[0], self.sweeper_config.steering_angle_range[1]),
+                2: (FACTOR * self.sweeper_config.acceleration_range[0], 0),
+                3: (FACTOR * self.sweeper_config.acceleration_range[1], FACTOR * self.sweeper_config.steering_angle_range[0]),
+                4: (0, FACTOR * self.sweeper_config.steering_angle_range[0]),
+                5: (FACTOR * self.sweeper_config.acceleration_range[0], FACTOR * self.sweeper_config.steering_angle_range[0]),
+                6: (FACTOR * self.sweeper_config.acceleration_range[1], FACTOR * self.sweeper_config.steering_angle_range[1]),
+                7: (0, FACTOR * self.sweeper_config.steering_angle_range[1]),
+                8: (FACTOR * self.sweeper_config.acceleration_range[0], FACTOR * self.sweeper_config.steering_angle_range[1]),
             }[action]
         elif self.sweeper_config.action_type == "discrete" \
             or "-" in self.sweeper_config.action_type and self.sweeper_config.action_type.split("-")[0] == "discrete":
@@ -468,7 +473,7 @@ class SweeperEnv(gym.Env):
             if event.key == pygame.K_q:
                 sys.exit()
             if event.key == pygame.K_r:
-                observation = env.reset()
+                observation = self.reset()
             if event.key == pygame.K_h:
                 print("Help")
                 print("----")
