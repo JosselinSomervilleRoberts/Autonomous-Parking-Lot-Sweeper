@@ -201,7 +201,7 @@ class SweeperEnv(gym.Env):
                 self.sweeper.acceleration / self.sweeper_config.acceleration_range[1],
                 np.cos(np.deg2rad(self.sweeper.angle)),
                 np.sin(np.deg2rad(self.sweeper.angle)),
-                *(self.radars / (self.sweeper_config.radar_max_distance * self.resolution))
+                *(self.radars / self.sweeper_config.radar_max_distance)
             ]
         elif self.sweeper_config.observation_type == 'torch-grid':
             raise NotImplementedError
@@ -291,7 +291,7 @@ class SweeperEnv(gym.Env):
     def compute_radars(self):
         for i in range(len(self.radars)):
             radar_angle = self.sweeper.angle + 360. / len(self.radars) * i
-            self.radars[i] = self.map.compute_distance_to_closest_obstacle(self.sweeper.position, radar_angle, int(self.sweeper_config.radar_max_distance * self.resolution))
+            self.radars[i] = self.map.compute_distance_to_closest_obstacle(self.sweeper.position, radar_angle, int(self.sweeper_config.radar_max_distance * self.resolution)) / self.resolution
 
     def check_collision(self):
         return self.map.check_collision(self.sweeper.get_bounding_box())
@@ -307,21 +307,24 @@ class SweeperEnv(gym.Env):
         self.map.cleaning_path = []
         self.stats.area_empty = self.map.get_empty_area(resolution=self.resolution)
 
+        # Radars
+        self.radars = np.zeros(self.sweeper_config.num_radars)
+
         # Reset sweeper by setting it's position to a random empty cell
         empty_cells = self.map.get_empty_tiles()
         collision = True
         while collision:
             self.sweeper.position = empty_cells[np.random.randint(len(empty_cells))].astype(float)
             collision = self.check_collision()
+            self.compute_radars()
+            if len(np.where(self.radars < self.sweeper_config.spawn_min_distance_to_wall)[0]) > 0:
+                collision = True
+            
         self.sweeper.angle = np.random.randint(360)
         self.sweeper.speed = 0
         self.sweeper.acceleration = 0
         self.sweeper.angle_speed = 0
         self.sweeper_positions = []
-        
-        # Radars
-        self.radars = np.zeros(self.sweeper_config.num_radars)
-        self.compute_radars()
 
         # Return observation
         return self._get_observation(), {"collision": False,}
@@ -394,9 +397,9 @@ class SweeperEnv(gym.Env):
             for i in range(self.sweeper_config.num_radars):
                 distance = self.radars[i]
                 # Draw the radar if the distance < max_distance
-                if distance < self.sweeper_config.radar_max_distance * self.resolution:
+                if distance < self.sweeper_config.radar_max_distance:
                     angle = self.sweeper.angle + 360 / self.sweeper_config.num_radars * i
-                    direction = distance * np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
+                    direction = self.resolution * distance * np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
                     pygame.draw.line(self.screen, self.render_options.distance_sensors_color, self.render_options.cell_size * sweeper_pos, self.render_options.cell_size * (sweeper_pos + direction), width=2) 
                     pygame.draw.circle(self.screen, self.render_options.distance_sensors_color, self.render_options.cell_size * (sweeper_pos + direction), 5)
         # Updates the screen

@@ -14,6 +14,7 @@ class SweeperConfig:
     friction                : float               = 5.0         # 1/s
     sweeper_size            : Tuple[float, float] = (2., 1.)    # units
     num_radars              : int                 = 16          # number of rays
+    spawn_min_distance_to_wall : float            = 2.5         # units
 
     def scale(self, resolution):
         self.acceleration_range = (self.acceleration_range[0] * resolution, self.acceleration_range[1] * resolution)
