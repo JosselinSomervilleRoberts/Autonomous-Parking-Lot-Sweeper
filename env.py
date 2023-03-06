@@ -6,7 +6,10 @@ import pygame
 from map import Map
 from config import SweeperConfig, RewardConfig, RenderOptions, SweeperStats
 import torch
+import configparser
 
+screen_config = configparser.ConfigParser()
+screen_config.read('screen_config.ini')
 
 
 def between(minimum, maximum):
@@ -162,7 +165,7 @@ class SweeperEnv(gym.Env):
 
     def init_map_and_sweeper(self, sweeper_config: SweeperConfig, resolution: float = 1, new_map: bool = True, generate_new_map: bool = False) -> None:
         GAME_WIDTH, GAME_HEIGHT = 50, 50
-        self.render_options.cell_size = int(round(16 / resolution))
+        self.render_options.cell_size = int(round(int(screen_config['SCREEN']['DEFAULT_CELL_SIZE']) / resolution))
         self.render_options.first_render = True
         map_width = int(round(GAME_WIDTH * resolution))
         map_height = int(round(GAME_HEIGHT * resolution))
