@@ -145,7 +145,7 @@ class SweeperEnv(gym.Env):
             if "-" in sweeper_config.action_type:
                 nb_discretization = int(sweeper_config.action_type.split("-")[1])
             # Discritize the action space in nb_discretization^2
-            self.action_space = gym.spaces.MultiDiscrete([nb_discretization, nb_discretization])
+            self.action_space = gym.spaces.Discrete(nb_discretization**2)
         else:
             raise Exception("Unknown action type: " + sweeper_config.action_type)
         self.action_to_acceleration_and_steering = self.get_action_to_acceleration_and_steering_fn()
@@ -234,8 +234,8 @@ class SweeperEnv(gym.Env):
                 nb_discretization = int(self.sweeper_config.action_type.split("-")[1])
             # Discritize the action space in nb_discretization^2
             return lambda action: (
-                np.interp(action[0], [0, nb_discretization-1], [self.sweeper_config.acceleration_range[0], self.sweeper_config.acceleration_range[1]]),
-                np.interp(action[1], [0, nb_discretization-1], [self.sweeper_config.steering_angle_range[0], self.sweeper_config.steering_angle_range[1]])
+                self.sweeper_config.acceleration_range[0] + (self.sweeper_config.acceleration_range[1] - self.sweeper_config.acceleration_range[0]) * action // nb_discretization,
+                self.sweeper_config.steering_angle_range[0] + (self.sweeper_config.steering_angle_range[1] - self.sweeper_config.steering_angle_range[0]) * (action % nb_discretization)
             )
 
 

@@ -15,7 +15,7 @@ from env import SweeperEnv
 from config import SweeperConfig, RewardConfig, RenderOptions
 
 # Create the environment
-sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-minimum', num_max_steps=1000, num_radars=8)
+sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-10', num_max_steps=1000, num_radars=16)
 reward_config = RewardConfig(done_on_collision=False, penalty_per_second=-1.0)
 render_options = RenderOptions(render=False)
 env = SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False)
@@ -58,11 +58,11 @@ class DQN(nn.Module):
 
     def __init__(self, n_observations, n_actions):
         super(DQN, self).__init__()
-        self.layer1 = nn.Linear(n_observations, 64)
+        self.layer1 = nn.Linear(n_observations, 128)
         self.dropout1 = nn.Dropout(p=0.2)
-        self.layer2 = nn.Linear(64, 64)
+        self.layer2 = nn.Linear(128, 128)
         self.dropout2 = nn.Dropout(p=0.2)
-        self.layer3 = nn.Linear(64, n_actions)
+        self.layer3 = nn.Linear(128, n_actions)
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).
