@@ -16,7 +16,7 @@ from config import SweeperConfig, RewardConfig, RenderOptions
 
 # Create the environment
 sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-10', num_max_steps=1000, num_radars=16)
-reward_config = RewardConfig(done_on_collision=False, penalty_per_second=-1.0)
+reward_config = RewardConfig(done_on_collision=False, reward_per_second=+60, reward_backwards=-3, reward_collision=-100, factor_area_cleaned=0.0)
 render_options = RenderOptions(render=False)
 env = SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False)
 

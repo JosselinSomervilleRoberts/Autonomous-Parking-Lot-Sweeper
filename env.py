@@ -279,11 +279,11 @@ class SweeperEnv(gym.Env):
         front_position = self.sweeper.get_front_position()
         new_area = self.map.apply_cleaning(front_position, width=1.6*self.sweeper.size[1], resolution=self.resolution)
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
-        reward = self.reward_config.factor_area_cleaned * new_area + self.reward_config.penalty_per_second * dt
+        reward = self.reward_config.factor_area_cleaned * new_area + self.reward_config.reward_per_second * dt
         if had_collision:
-            reward += self.reward_config.penalty_collision
+            reward += self.reward_config.reward_collision
         if self.sweeper.speed < 0:
-            reward += self.reward_config.penalty_backwards
+            reward += self.reward_config.reward_backwards
 
         # Radars
         self.compute_radars()
