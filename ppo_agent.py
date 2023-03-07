@@ -27,13 +27,13 @@ parser.add_argument("--env_max_steps", type=int, default=5000, help="Max steps p
 parser.add_argument("--env_num_radars", type=int, default=20, help="Number of radars")
 
 # Reward
-parser.add_argument("--reward_collision", type=float, default=-1000, help="Reward for collision")
+parser.add_argument("--reward_collision", type=float, default=-10000, help="Reward for collision")
 parser.add_argument("--reward_per_step", type=float, default=-0.1, help="Reward per step")
 parser.add_argument("--reward_per_second", type=float, default=0, help="Reward per second")
 parser.add_argument("--reward_area_total", type=float, default=10000, help="Reward factor for area")
 parser.add_argument("--reward_backwards", type=float, default=-1, help="Reward for going backwards")
 parser.add_argument("--reward_idle", type=float, default=-2, help="Reward for idling")
-parser.add_argument("--done_on_collision", type=bool, default=True, help="Done on collision")
+parser.add_argument("--not_done_on_collision", action="store_true", help="Not done on collision")
 
 # Algorithm
 parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm", choices=["PPO", "DQN", "DDPG", "TD3"])
@@ -128,7 +128,7 @@ elif args.algorithm == "TD3":
 
 # Create the environment
 sweeper_config = SweeperConfig(observation_type=args.observation_type, action_type=args.action_type, num_max_steps=args.env_max_steps, num_radars=args.env_num_radars)
-reward_config = RewardConfig(done_on_collision=args.done_on_collision, reward_collision=args.reward_collision, reward_per_step=args.reward_per_step, reward_per_second=args.reward_per_second, reward_area_total=args.reward_area_total, reward_backwards=args.reward_backwards, reward_idle=args.reward_idle)
+reward_config = RewardConfig(done_on_collision=(not args.not_done_on_collision), reward_collision=args.reward_collision, reward_per_step=args.reward_per_step, reward_per_second=args.reward_per_second, reward_area_total=args.reward_area_total, reward_backwards=args.reward_backwards, reward_idle=args.reward_idle)
 render_options = RenderOptions(render=True)
 print_with_color(str(sweeper_config) + "\n", color='blue')
 print_with_color(str(reward_config) + "\n", color='yellow')
