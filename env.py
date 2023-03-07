@@ -205,16 +205,12 @@ class SweeperEnv(gym.Env):
         self.reset()
 
     def init_gym(self, sweeper_config: SweeperConfig) -> None:
-        # Extract from config
-        accel_low, accel_high = sweeper_config.acceleration_range
-        steer_low, steer_high = sweeper_config.steering_angle_range
-        
         # Action Space:
         if sweeper_config.action_type == "continuous":
             # - Acceleration (continuous) # m/s^2
             # - Steering (continuous)     # degrees/s
             self.action_space = gym.spaces.Box(
-                low=np.array([accel_low, steer_low]), high=np.array([accel_high, steer_high])
+                low=np.array([-1, -1]), high=np.array([1, 1])
             )
         elif sweeper_config.action_type == "discrete-minimum":
             # - 0: accelerate max forward and don't turn
@@ -331,7 +327,10 @@ class SweeperEnv(gym.Env):
 
     def get_action_to_acceleration_and_steering_fn(self):
         if self.sweeper_config.action_type == "continuous":
-            return lambda action: action
+            return lambda action: (
+                np.interp(action[0], [-1, 1], self.sweeper_config.acceleration_range),
+                np.interp(action[1], [-1, 1], self.sweeper_config.steering_angle_range)
+            )
         elif self.sweeper_config.action_type == "discrete-minimum":
             FACTOR = 0.75
             return lambda action: {
