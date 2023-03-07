@@ -306,6 +306,9 @@ class Map:
         return len(self.get_empty_tiles()) / resolution
 
     def compute_distance_to_closest_obstacle(self, pos, rad_angle, max_distance=1000):
+        return self.compute_distance_to_closest_cell_of_value(self, pos, rad_angle, value=Map.CELL_OBSTACLE, max_distance=max_distance)
+
+    def compute_distance_to_closest_cell_of_value(self, pos, rad_angle, value, max_distance=1000):
         """Returns the distance to the closest obstacle in the given direction"""
         # Compute the direction vector
         direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
@@ -321,7 +324,7 @@ class Map:
             if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
                 d = distance-1
                 break
-            if self.grid[rounded_cell[0], rounded_cell[1]] == Map.CELL_OBSTACLE:
+            if self.grid[rounded_cell[0], rounded_cell[1]] == value:
                 d = distance - 1
                 break
         
@@ -338,7 +341,7 @@ class Map:
                 if int(next_cell[0]) < 0 or int(next_cell[0]) >= self.width or int(next_cell[1]) < 0 or int(next_cell[1]) >= self.height:
                     max_distance = d
                 # Checks if the point is within an obstacle (without rounding)
-                elif self.grid[int(next_cell[0]), int(next_cell[1])] == Map.CELL_OBSTACLE:
+                elif self.grid[int(next_cell[0]), int(next_cell[1])] == value:
                     max_distance = d
                 else:
                     min_distance = d

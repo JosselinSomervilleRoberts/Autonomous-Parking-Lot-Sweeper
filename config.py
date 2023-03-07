@@ -136,8 +136,10 @@ class RenderOptions:
     velocity_color  : Tuple[int, int, int] = (0, 0, 255)
 
     # Distance sensor
-    show_distance_sensors : bool = False
-    distance_sensors_color : Tuple[int, int, int] = (255, 0, 255)
+    show_radars_obstacle : bool = False
+    radars_obstacle_color : Tuple[int, int, int] = (255, 0, 255)
+    show_radars_empty : bool = False
+    radars_empty_color : Tuple[int, int, int] = (0, 255, 255)
 
     def __str__(self):
         return f"""RenderOptions(
@@ -167,6 +169,8 @@ class RenderOptions:
     show_area               : {self.show_area}
     show_velocity           : {self.show_velocity}
     velocity_color          : {self.velocity_color}
-    show_distance_sensors   : {self.show_distance_sensors}
-    distance_sensors_color  : {self.distance_sensors_color}
+    show_radars_obstacle    : {self.show_radars_obstacle}
+    radars_obstacle_color   : {self.radars_obstacle_color}
+    show_radars_empty       : {self.show_radars_empty}
+    radars_empty_color      : {self.radars_empty_color}
 )"""
