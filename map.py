@@ -37,6 +37,7 @@ class Map:
         self.cleaned_cells_to_display = []
 
     def init_random(self):
+        # print("Generating random map...")
         # Call generate_random with random parameters
         self.generate_random(
             nb_obstacles=random.randint(5, 10),
@@ -220,6 +221,7 @@ class Map:
             self.init_random()
             return
         i = random.randint(0, len_maps - 1)
+        # print(f"Loading map {i}...")
         self.load(f"maps/map_{i}.npy")
 
     def display(self, sweeper, screen, rerender=False):
@@ -287,10 +289,10 @@ class Map:
     def get_empty_area(self, resolution=1.0) -> float:
         return len(self.get_empty_tiles()) / resolution
 
-    def compute_distance_to_closest_obstacle(self, pos, angle, max_distance=1000):
+    def compute_distance_to_closest_obstacle(self, pos, rad_angle, max_distance=1000):
         """Returns the distance to the closest obstacle in the given direction"""
         # Compute the direction vector
-        direction = np.array([np.cos(np.deg2rad(angle)), np.sin(np.deg2rad(angle))])
+        direction = np.array([np.cos(rad_angle), np.sin(rad_angle)])
 
         # Compute the distance to the closest obstacle using a step by step approach
         d = max_distance
@@ -316,8 +318,11 @@ class Map:
             while max_distance - min_distance > 0.1:
                 d = (min_distance + max_distance) / 2.
                 next_cell = pos + d * direction
+                # Checks if the point is within bounds
+                if int(next_cell[0]) < 0 or int(next_cell[0]) >= self.width or int(next_cell[1]) < 0 or int(next_cell[1]) >= self.height:
+                    max_distance = d
                 # Checks if the point is within an obstacle (without rounding)
-                if self.grid[int(next_cell[0]), int(next_cell[1])] == 1:
+                elif self.grid[int(next_cell[0]), int(next_cell[1])] == 1:
                     max_distance = d
                 else:
                     min_distance = d

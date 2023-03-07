@@ -5,15 +5,15 @@ from dataclasses import dataclass
 class SweeperConfig:
     """Configuration for the sweeper speed."""
     num_max_steps           : int                 = 9999        # number of steps before the episode ends
-    observation_type        : str                 = 'dict'      # 'dict', 'torch-no-grid', 'torch-grid'
+    observation_type        : str                 = 'torch-no-grid'      # 'dict', 'torch-no-grid', 'torch-grid'
     action_type             : str                 = 'continuous'# 'continuous', 'discrete-minimum', 'discrete' or 'discrete-x' with x an integer
-    acceleration_range      : Tuple[float, float] = (-60, 60)   # units/s**2
+    acceleration_range      : Tuple[float, float] = (-30, 30)   # units/s**2
     velocity_range          : Tuple[float, float] = (-6, 12)    # units/s
     steering_angle_range    : Tuple[float, float] = (-200, 200) # degrees/s
     radar_max_distance      : float               = 5           # units
-    friction                : float               = 5.0         # 1/s
+    friction                : float               = 3.0         # 1/s
     sweeper_size            : Tuple[float, float] = (2., 1.)    # units
-    num_radars              : int                 = 16          # number of rays
+    num_radars              : int                 = 32           # number of rays
     spawn_min_distance_to_wall : float            = 2.5         # units
 
     def scale(self, resolution):
@@ -29,6 +29,7 @@ class RewardConfig:
     factor_area_cleaned     : float = 1.0
     reward_collision        : float = -100.0
     reward_per_second       : float = -0.1
+    reward_per_step         : float = 0
     reward_backwards        : float = -0.1
     done_on_collision       : bool  = False
 
