@@ -97,7 +97,7 @@ reward_per_second: {args.reward_per_second}
 reward_area_total: {args.reward_area_total}
 reward_backwards: {args.reward_backwards}
 reward_idle: {args.reward_idle}
-done_on_collision: {args.done_on_collision}
+done_on_collision: {not args.bot_done_on_collision}
 
 algorithm: {args.algorithm}
 policy: {args.policy}
