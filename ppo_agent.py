@@ -1,5 +1,6 @@
 import sys
 from stable_baselines3 import PPO, DQN, DDPG, TD3
+from stable_baselines3.common.callbacks import CheckpointCallback
 from env import SweeperEnv
 from config import SweeperConfig, RewardConfig, RenderOptions
 import argparse
@@ -16,6 +17,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--tensorboard", action="store_true", help="Enable tensorboard logging")
 parser.add_argument("--tensorboard-log", type=str, default="./ppo_tensorboard/", help="Tensorboard log dir")
 parser.add_argument("--verbose", type=int, default=1, help="Verbose mode (0: no output, 1: INFO)")
+parser.add_argument("--save_freq", type=int, default=50000, help="Save model every x steps (0: no checkpoint)")
+parser.add_argument("--save_path", type=str, default="./models/", help="Path to save the model")
 
 # Environment
 parser.add_argument("--observation_type", type=str, default="complex", help="Observation type", choices=["simple", "grid-only", "complex"])
@@ -145,6 +148,7 @@ if args.tensorboard and os.name == 'posix': # Checks if os is Linux
         print_with_color("Not deleting tensorboard log directory.\n", color='green')
 
 # Create the model
+checkpoint_callback = CheckpointCallback(save_freq=args.save_freq, save_path=args.save_path)
 tensorboard_log = args.tensorboard_log if args.tensorboard else None
 model = model_type(policy=args.policy,
     env=env,
@@ -185,10 +189,10 @@ print("")
 
 for j in range(args.n_iter_learn):
     # Train the agent
-    model.learn(total_timesteps=args.total_timesteps)
+    model.learn(total_timesteps=args.total_timesteps, callback=[checkpoint_callback])
 
     # Save the agent
-    model.save("models/" + args.algorithm + "_model_" + str(j))
+    model.save(args.save_path + args.algorithm + "_model_" + str(j))
 
     # Test the agent
     vec_env = model.get_env()
@@ -214,7 +218,7 @@ for j in range(args.n_iter_learn):
             if done:
                 obs = env.reset()
     else:
-        print("Iter " + str(j) + ": " + str(model.test(env, n_eval_episodes=10)))
+        print("Iter " + str(j) + "done")
         print("To see the visual test, run the script with the --disable-visual-test flag disabled.")
 
 
