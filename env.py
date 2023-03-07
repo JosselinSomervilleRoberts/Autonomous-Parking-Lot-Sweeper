@@ -68,7 +68,7 @@ class Sweeper:
         old_speed = self.speed
         self.speed += self.acceleration * dt
         self.speed *= (1 - self.friction * dt)
-        self.speed = max(min(self.speed, self.conf.velocity_range[1]), self.conf.velocity_range[0])
+        self.speed = max(min(self.speed, self.conf.speed_range[1]), self.conf.speed_range[0])
         # The speed can't change sign
         if self.speed * old_speed < 0:
             self.speed = 0
@@ -87,6 +87,30 @@ class Sweeper:
             [x - w/2 * np.cos(angle) - h/2 * np.sin(angle), y - w/2 * np.sin(angle) + h/2 * np.cos(angle)],
             [x - w/2 * np.cos(angle) + h/2 * np.sin(angle), y - w/2 * np.sin(angle) - h/2 * np.cos(angle)],
             [x + w/2 * np.cos(angle) + h/2 * np.sin(angle), y + w/2 * np.sin(angle) - h/2 * np.cos(angle)]
+        ])
+
+    def get_upper_bounding_box(self, factor = 1.):
+        # Get upper bounding box of the sweeper (the position is the center of the sweeper)
+        x, y = self.position
+        w, h = self.size * factor
+        angle = self.angle * np.pi / 180.
+        return np.array([
+            [x + w/2 * np.cos(angle) - h/2 * np.sin(angle), y + w/2 * np.sin(angle) + h/2 * np.cos(angle)],
+            [x                       - h/2 * np.sin(angle), y                       + h/2 * np.cos(angle)],
+            [x                       + h/2 * np.sin(angle), y                       - h/2 * np.cos(angle)],
+            [x + w/2 * np.cos(angle) + h/2 * np.sin(angle), y + w/2 * np.sin(angle) - h/2 * np.cos(angle)]
+        ])
+
+    def get_lower_bounding_box(self, factor = 1.):
+        # Get lower bounding box of the sweeper (the position is the center of the sweeper)
+        x, y = self.position
+        w, h = self.size * factor
+        angle = self.angle * np.pi / 180.
+        return np.array([
+            [x                       - h/2 * np.sin(angle), y                       + h/2 * np.cos(angle)],
+            [x - w/2 * np.cos(angle) - h/2 * np.sin(angle), y - w/2 * np.sin(angle) + h/2 * np.cos(angle)],
+            [x - w/2 * np.cos(angle) + h/2 * np.sin(angle), y - w/2 * np.sin(angle) - h/2 * np.cos(angle)],
+            [x                       + h/2 * np.sin(angle), y                       - h/2 * np.cos(angle)]
         ])
 
     def get_front_position(self):
@@ -210,43 +234,49 @@ class SweeperEnv(gym.Env):
                 nb_discretization = int(sweeper_config.action_type.split("-")[1])
             # Discritize the action space in nb_discretization^2
             self.action_space = gym.spaces.Discrete(nb_discretization**2)
+        elif sweeper_config.action_type == "multi-discrete" \
+            or "-" in sweeper_config.action_type and sweeper_config.action_type.split("-")[0] == "multi-discrete":
+            nb_discretization = 10
+            if "-" in sweeper_config.action_type:
+                nb_discretization = int(sweeper_config.action_type.split("-")[1])
+            # Discritize the action space in nb_discretization^2
+            self.action_space = gym.spaces.MultiDiscrete([nb_discretization, nb_discretization])
         else:
             raise Exception("Unknown action type: " + sweeper_config.action_type)
         self.action_to_acceleration_and_steering = self.get_action_to_acceleration_and_steering_fn()
         
         # State space:
-        # - Position (x, y) (continuous)
-        # - Velocity (x, y) (continuous)
-        # - Angle (continuous)
-        # - Steering (continuous)
-        # - Grid (discrete 2D n*n)
-        #    - 0: Empty
-        #    - 1: Obstacle
-        #    - 2: Cleaned
-        # - Distances to closest obstacle (M directions) [Contraint -> Max v distance: max_distance]
         self.observation_space = None
-        if sweeper_config.observation_type == "torch-no-grid":
-            # Gym box, first dim is from -1 to 1, all others are from 0 to 1
+        if sweeper_config.observation_type == "simple":
+            # Gets only speed and radar distances
             self.observation_space = gym.spaces.Box(
-                low=np.array([-1] + [0] * (sweeper_config.num_radars)),
-                high=np.array([1] + [1] * (sweeper_config.num_radars)),
+                low=np.array([sweeper_config.speed_range[0]] + [0] * (sweeper_config.num_radars)),
+                high=np.array([sweeper_config.speed_range[1]] + [sweeper_config.radar_max_distance] * (sweeper_config.num_radars)),
                 dtype=np.float32
             )
-        elif sweeper_config.observation_type == "torch-grid":
+        elif sweeper_config.observation_type == "grid-only":
+            # Gets only the grid
+            # Reshapes self.map.grid from (width, height) to (width, height, 1)
+            self.observation_space = gym.spaces.Box(
+                low=0, high=255, shape=(self.map.width, self.map.height, 1), dtype=Map.CELL_TYPE
+            )
+        elif sweeper_config.observation_type == "complex":
+            # Gets the grid, the radar distances, the normalized position, the speed and the direction
+            # Reshapes self.map.grid from (width, height) to (width, height, 1)
             self.observation_space = gym.spaces.Dict({
                 "grid": gym.spaces.Box(
                     low=0, high=255, shape=(self.map.width, self.map.height, 1), dtype=Map.CELL_TYPE
                 ),
                 "radars": gym.spaces.Box(
-                    low=0, high=1, shape=(sweeper_config.num_radars,), dtype=np.float32
+                    low=0, high=sweeper_config.radar_max_distance, shape=(sweeper_config.num_radars,), dtype=np.float32
                 ),
                 "position": gym.spaces.Box(
                     low=0, high=1, shape=(2,), dtype=np.float32
                 ),
-                "velocity": gym.spaces.Box(
-                    low=-1, high=1, shape=(2,), dtype=np.float32
+                "speed": gym.spaces.Box(
+                    low=sweeper_config.speed_range[0], high=sweeper_config.speed_range[1], shape=(1,), dtype=np.float32
                 ),
-                "angle": gym.spaces.Box(
+                "direction": gym.spaces.Box(
                     low=-1, high=1, shape=(2,), dtype=np.float32
                 ),
             })
@@ -277,34 +307,24 @@ class SweeperEnv(gym.Env):
         # Create sweeper
         self.sweeper = Sweeper(sweeper_config)
 
+    def _get_grid_for_observation(self):
+        return self.map.get_reshaped_grid_with_sweeper(self.sweeper)
+
     def _get_observation(self):
-        if self.sweeper_config.observation_type == 'dict':
-            # Get the observation (copy position, speed, acceleration, angle, steering)
-            # Return as a dict
-            return {
-                "position": self.sweeper.position.copy(),
-                "speed": self.sweeper.speed,
-                "acceleration": self.sweeper.acceleration,
-                "angle": self.sweeper.angle,
-                "steering": self.sweeper.angle_speed,
-                "grid": self.map.grid,
-                "distances": self.radar_values.copy()
-            }
-        elif self.sweeper_config.observation_type == 'torch-no-grid':
-            # Get the observation
+        if self.sweeper_config.observation_type == 'simple':
             return np.array([
-                self.sweeper.speed / self.sweeper_config.velocity_range[1],
-                *(-1. + 2. *self.radar_values / self.sweeper_config.radar_max_distance)
+                self.sweeper.speed,
+                *self.radar_values
             ])
-        elif self.sweeper_config.observation_type == 'torch-grid':
-            dir = np.array([np.cos(self.sweeper.angle), np.sin(self.sweeper.angle)])
+        elif self.sweeper_config.observation_type == 'grid-only':
+            return self._get_grid_for_observation()
+        elif self.sweeper_config.observation_type == 'complex':
             return {
-                # Reshapes self.map.grid from (width, height) to (width, height, 1)
-                "grid": self.map.grid.reshape(self.map.width, self.map.height, 1),
+                "grid": self._get_grid_for_observation(),
                 "radars": self.radar_values.copy(),
-                "position": self.sweeper.position.copy() / self.map.width,
-                "velocity": self.sweeper.speed / self.sweeper_config.velocity_range[1] * dir,
-                "angle": dir
+                "position": self.sweeper.position.copy() / np.array([self.map.width, self.map.height]),
+                "speed": self.sweeper.speed,
+                "direction": np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))])
             }
         else:
             raise Exception("Unknown observation type: " + self.sweeper_config.observation_type)
@@ -334,6 +354,16 @@ class SweeperEnv(gym.Env):
             return lambda action: (
                 self.sweeper_config.acceleration_range[0] + (self.sweeper_config.acceleration_range[1] - self.sweeper_config.acceleration_range[0]) * action // nb_discretization,
                 self.sweeper_config.steering_angle_range[0] + (self.sweeper_config.steering_angle_range[1] - self.sweeper_config.steering_angle_range[0]) * (action % nb_discretization)
+            )
+        elif sweeper_config.action_type == "multi-discrete" \
+            or "-" in self.sweeper_config.action_type and self.sweeper_config.action_type.split("-")[0] == "multi-discrete":
+            nb_discretization = 10
+            if "-" in self.sweeper_config.action_type:
+                nb_discretization = int(self.sweeper_config.action_type.split("-")[1])
+            # Discritize the action space in nb_discretization^2
+            return lambda action: (
+                self.sweeper_config.acceleration_range[0] + (self.sweeper_config.acceleration_range[1] - self.sweeper_config.acceleration_range[0]) * action[0] // nb_discretization,
+                self.sweeper_config.steering_angle_range[0] + (self.sweeper_config.steering_angle_range[1] - self.sweeper_config.steering_angle_range[0]) * action[1] // nb_discretization
             )
 
 
@@ -377,7 +407,7 @@ class SweeperEnv(gym.Env):
         front_position = self.sweeper.get_front_position()
         new_area = self.map.apply_cleaning(front_position, width=1.6*self.sweeper.size[1], resolution=self.resolution)
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
-        reward = self.reward_config.factor_area_cleaned * new_area + self.reward_config.reward_per_second * dt + self.reward_config.reward_per_step
+        reward = self.reward_config.reward_factor_area * new_area + self.reward_config.reward_per_second * dt + self.reward_config.reward_per_step
         if had_collision:
             reward += self.reward_config.reward_collision
         if self.sweeper.speed < 0:

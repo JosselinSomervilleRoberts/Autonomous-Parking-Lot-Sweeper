@@ -32,7 +32,7 @@ log_every = args.log_every
 
 # Create the environment
 sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-5', num_max_steps=800, num_radars=20)
-reward_config = RewardConfig(done_on_collision=True, reward_per_second=0, reward_per_step=0.5, reward_backwards=-3, reward_collision=-1000, factor_area_cleaned=10.0)
+reward_config = RewardConfig(done_on_collision=True, reward_per_second=0, reward_per_step=0.5, reward_backwards=-3, reward_collision=-1000, reward_factor_area=10.0)
 render_options = RenderOptions(render=False)
 env = SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False)
 

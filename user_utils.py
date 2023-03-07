@@ -67,6 +67,11 @@ def get_with_color(text: str, color: Union[FontColorDummy, str, list]) -> str:
     return str(color) + text + str(FontColor.END)
 
 
+def print_with_color(text: str, color: Union[FontColorDummy, str, list]):
+    """Print text with color(s)"""
+    print(get_with_color(text, color))
+
+
 def ask_yes_no_question(question: str, color: Union[str, list] = None) -> bool:
     """Ask a yes/no question to the user."""
     if color is None:
@@ -88,6 +93,10 @@ def warn(text: str, severity: int = 1):
         print(get_with_color("Warning: ", FontColor.RED) + text)
     else:
         print(get_with_color("Warning: ", [FontColor.BOLD, FontColor.RED]) + text)
+
+def error(text: str) -> None:
+    """Print an error message."""
+    raise ValueError(get_with_color("Error: ", [FontColor.BOLD, FontColor.RED]) + text)
 
 
 if __name__ == "__main__":

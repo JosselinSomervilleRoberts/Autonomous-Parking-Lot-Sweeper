@@ -32,6 +32,8 @@ class Map:
     CELL_EMPTY = 0
     CELL_OBSTACLE = 255
     CELL_CLEANED = 64
+    CELL_FRONT_SWEEPER = 128
+    CELL_BACK_SWEEPER = 192
 
     def __init__(self, width: int, height: int, render_options: RenderOptions):
         self.render_options = render_options
@@ -127,7 +129,8 @@ class Map:
                 return count / resolution**2
         return 0
 
-    def fill_polygon_for_cleaning(self, polygon: Polygon, value: int):
+    def fill_polygon_for_cleaning(self, polygon: Polygon, value: int, grid: np.ndarray = None):
+        if grid is None: grid = self.grid
         # Get bounding box
         min_x = max(0, int(polygon.bounds[0]))
         min_y = max(0, int(polygon.bounds[1]))
@@ -144,7 +147,8 @@ class Map:
                     count += 1
         return count
 
-    def fill_polygon(self, polygon: Polygon, value: int):
+    def fill_polygon(self, polygon: Polygon, value: int, grid: np.ndarray = None):
+        if grid is None: grid = self.grid
         # Get bounding box
         min_x = max(0, int(polygon.bounds[0]))
         min_y = max(0, int(polygon.bounds[1]))
@@ -156,6 +160,17 @@ class Map:
             for y in range(min_y, max_y):
                 if self.grid[x, y] != value and polygon.contains(Point(x, y)):
                     self.grid[x, y] = value
+
+    def fill_rectangle(self, rectangle: np.ndarray, value: int, grid: np.ndarray = None):
+        if grid is None: grid = self.grid
+        polygon = Polygon(rectangle)
+        self.fill_polygon(polygon, value, grid=grid)
+
+    def get_reshaped_grid_with_sweeper(self, sweeper) -> np.ndarray:
+        g = self.grid.reshape(self.width, self.height, 1)
+        self.fill_rectangle(sweeper.get_lower_bounding_box(), Map.CELL_BACK_SWEEPER, grid=g)
+        self.fill_rectangle(sweeper.get_upper_bounding_box(), Map.CELL_FRONT_SWEEPER, grid=g)
+        return g
 
     def check_collision(self, rectangle: np.ndarray) -> bool:
         # Convert the coordinates to integers

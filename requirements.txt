@@ -1,7 +1,9 @@
 shapely
 metrics
 matplotlib
-gymnasium
+gym
 pygame
 numpy
 typing
+tensorboard
+torch
