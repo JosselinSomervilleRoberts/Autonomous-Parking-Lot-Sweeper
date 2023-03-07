@@ -153,7 +153,7 @@ tensorboard_log = args.tensorboard_log if args.tensorboard else None
 model = model_type(policy=args.policy,
     env=env,
     learning_rate=args.learning_rate,
-    n_steps=args.n_steps,
+    #n_steps=args.n_steps,
     batch_size=args.batch_size,
     # n_epochs=args.n_epochs,
     gamma=args.gamma,
