@@ -24,7 +24,7 @@ parser.add_argument("--save_path", type=str, default="./models/", help="Path to 
 parser.add_argument("--observation_type", type=str, default="complex", help="Observation type", choices=["simple", "simple-double-radar", "grid-only", "complex"])
 parser.add_argument("--action_type", type=str, default="continuous", help="Action type")
 parser.add_argument("--env_max_steps", type=int, default=5000, help="Max steps per episode")
-parser.add_argument("--env_num_radars", type=int, default=128, help="Number of radars")
+parser.add_argument("--env_num_radars", type=int, default=24, help="Number of radars")
 
 # Reward
 parser.add_argument("--reward_collision", type=float, default=-10000, help="Reward for collision")
@@ -168,7 +168,7 @@ model = model_type(policy=args.policy,
     # sde_sample_freq=args.sde_sample_freq,
     # target_kl=args.target_kl,
     tensorboard_log=tensorboard_log,
-    # policy_kwargs=policy_kwargs,
+    policy_kwargs={"net_arch": [128,256,256,128]},
     verbose=args.verbose,
     # seed=args.seed,
     # device=args.device,
