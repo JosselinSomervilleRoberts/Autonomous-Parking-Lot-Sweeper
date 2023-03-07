@@ -56,6 +56,7 @@ class RewardConfig:
     reward_per_second       : {self.reward_per_second}
     reward_per_step         : {self.reward_per_step}
     reward_backwards        : {self.reward_backwards}
+    reward_idle             : {self.reward_idle}
     done_on_collision       : {self.done_on_collision}
 )"""
 
