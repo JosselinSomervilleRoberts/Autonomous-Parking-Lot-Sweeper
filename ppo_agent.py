@@ -19,13 +19,16 @@ parser = argparse.ArgumentParser()
 
 
 # Create the environment
-sweeper_config = SweeperConfig(observation_type='torch-no-grid', action_type='discrete-minimum', num_max_steps=5000, num_radars=20)
-reward_config = RewardConfig(done_on_collision=True, reward_per_second=0, reward_per_step=-0.5, reward_backwards=-3, reward_collision=-1000, factor_area_cleaned=10.0)
+sweeper_config = SweeperConfig(observation_type='torch-grid', action_type='discrete-minimum', num_max_steps=5000, num_radars=20)
+reward_config = RewardConfig(done_on_collision=True, reward_per_second=0, reward_per_step=-0.1, reward_backwards=-3, reward_collision=-1000, factor_area_cleaned=10.0)
 render_options = RenderOptions(render=True)
 env = SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False)
 
 
-model = PPO("MlpPolicy", env, verbose=1)
+model = PPO("MultiInputPolicy", env, verbose=1)
+
+# Prints the model architecture
+print(model.policy)
 
 for _ in range(10):
     model.learn(total_timesteps=50_000)

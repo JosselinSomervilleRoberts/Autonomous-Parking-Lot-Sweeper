@@ -174,8 +174,8 @@ class SweeperEnv(gym.Env):
 
         # Init everything
         sweeper_config.scale(resolution)
-        self.init_gym(sweeper_config)
         self.init_map_and_sweeper(sweeper_config, resolution)
+        self.init_gym(sweeper_config)
 
         # Reset the environment
         self.reset()
@@ -232,6 +232,24 @@ class SweeperEnv(gym.Env):
                 high=np.array([1] + [1] * (sweeper_config.num_radars)),
                 dtype=np.float32
             )
+        elif sweeper_config.observation_type == "torch-grid":
+            self.observation_space = gym.spaces.Dict({
+                "grid": gym.spaces.Box(
+                    low=0, high=255, shape=(self.map.width, self.map.height, 1), dtype=Map.CELL_TYPE
+                ),
+                "radars": gym.spaces.Box(
+                    low=0, high=1, shape=(sweeper_config.num_radars,), dtype=np.float32
+                ),
+                "position": gym.spaces.Box(
+                    low=0, high=1, shape=(2,), dtype=np.float32
+                ),
+                "velocity": gym.spaces.Box(
+                    low=-1, high=1, shape=(2,), dtype=np.float32
+                ),
+                "angle": gym.spaces.Box(
+                    low=-1, high=1, shape=(2,), dtype=np.float32
+                ),
+            })
         else:
             raise Exception("Unknown observation type: " + sweeper_config.observation_type)
 
@@ -279,7 +297,17 @@ class SweeperEnv(gym.Env):
                 *(-1. + 2. *self.radar_values / self.sweeper_config.radar_max_distance)
             ])
         elif self.sweeper_config.observation_type == 'torch-grid':
-            raise NotImplementedError
+            dir = np.array([np.cos(self.sweeper.angle), np.sin(self.sweeper.angle)])
+            return {
+                # Reshapes self.map.grid from (width, height) to (width, height, 1)
+                "grid": self.map.grid.reshape(self.map.width, self.map.height, 1),
+                "radars": self.radar_values.copy(),
+                "position": self.sweeper.position.copy() / self.map.width,
+                "velocity": self.sweeper.speed / self.sweeper_config.velocity_range[1] * dir,
+                "angle": dir
+            }
+        else:
+            raise Exception("Unknown observation type: " + self.sweeper_config.observation_type)
 
     def get_action_to_acceleration_and_steering_fn(self):
         if self.sweeper_config.action_type == "continuous":
@@ -642,38 +670,39 @@ if __name__ == "__main__":
         acceleration = 0
 
         # Edit map
-        left, middle, right = pygame.mouse.get_pressed()
-        if left:
-            # Get the position of the mouse
-            mouse_pos = pygame.mouse.get_pos()
-            # Get the cell position
-            cell_pos = (mouse_pos[0] // env.render_options.cell_size, mouse_pos[1] // env.render_options.cell_size)
-            env.map.set_cell_value(cell_pos[0], cell_pos[1], 1)
-        if right:
-            # Get the position of the mouse
-            mouse_pos = pygame.mouse.get_pos()
-            # Get the cell position
-            cell_pos = (mouse_pos[0] // env.render_options.cell_size, mouse_pos[1] // env.render_options.cell_size)
-            env.map.set_cell_value(cell_pos[0], cell_pos[1], 0)
+        if pygame.get_init():
+            left, middle, right = pygame.mouse.get_pressed()
+            if left:
+                # Get the position of the mouse
+                mouse_pos = pygame.mouse.get_pos()
+                # Get the cell position
+                cell_pos = (mouse_pos[0] // env.render_options.cell_size, mouse_pos[1] // env.render_options.cell_size)
+                env.map.set_cell_value(cell_pos[0], cell_pos[1], Map.CELL_OBSTACLE)
+            if right:
+                # Get the position of the mouse
+                mouse_pos = pygame.mouse.get_pos()
+                # Get the cell position
+                cell_pos = (mouse_pos[0] // env.render_options.cell_size, mouse_pos[1] // env.render_options.cell_size)
+                env.map.set_cell_value(cell_pos[0], cell_pos[1], Map.CELL_EMPTY)
 
 
-        # Checks for event to close the window
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                sys.exit()
-            else:
-                env.process_pygame_event(event)
+            # Checks for event to close the window
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    sys.exit()
+                else:
+                    env.process_pygame_event(event)
 
-        # Checks for key pressed
-        keys = pygame.key.get_pressed()
-        if keys[pygame.K_LEFT]:
-            steering = sweeper_config.steering_angle_range[0]
-        if keys[pygame.K_RIGHT]:
-            steering = sweeper_config.steering_angle_range[1]
-        if keys[pygame.K_UP]:
-            acceleration = sweeper_config.acceleration_range[1]
-        if keys[pygame.K_DOWN]:
-            acceleration = sweeper_config.acceleration_range[0]
+            # Checks for key pressed
+            keys = pygame.key.get_pressed()
+            if keys[pygame.K_LEFT]:
+                steering = sweeper_config.steering_angle_range[0]
+            if keys[pygame.K_RIGHT]:
+                steering = sweeper_config.steering_angle_range[1]
+            if keys[pygame.K_UP]:
+                acceleration = sweeper_config.acceleration_range[1]
+            if keys[pygame.K_DOWN]:
+                acceleration = sweeper_config.acceleration_range[0]
 
 
         clock.tick(60)
