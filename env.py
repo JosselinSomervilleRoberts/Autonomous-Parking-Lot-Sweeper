@@ -441,7 +441,6 @@ class SweeperEnv(gym.Env):
         self.stats = SweeperStats()
 
         # Reset map
-        self.render_options.first_render = True
         self.init_map_and_sweeper(sweeper_config=self.sweeper_config, resolution=self.resolution, new_map=new_map, generate_new_map=generate_new_map)
         self.map.cleaning_path = []
         self.stats.area_empty = self.map.get_empty_area(resolution=self.resolution)
@@ -498,8 +497,9 @@ class SweeperEnv(gym.Env):
             self.init_pygame()
 
         # Render map
-        if self.render_options.show_path or self.render_options.show_distance_sensors: self.render_options.first_render = True
-        self.map.display(self.sweeper, self.screen, rerender=self.render_options.first_render)
+        rerender = self.render_options.first_render \
+            or self.render_options.show_path or self.render_options.show_distance_sensors
+        self.map.display(self.sweeper, self.screen, rerender=rerender)
         self.render_options.first_render = False
 
         # Draw the sweeper's path (with alpha decreasing with time)

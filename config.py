@@ -46,7 +46,7 @@ class RewardConfig:
     reward_per_second       : float = 0
     reward_per_step         : float = -0.1
     reward_backwards        : float = -1.0
-    reward_idle             : float = -50.0
+    reward_idle             : float = -2.0
     done_on_collision       : bool  = False
 
     def __str__(self):

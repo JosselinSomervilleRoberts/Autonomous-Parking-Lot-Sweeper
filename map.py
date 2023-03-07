@@ -60,22 +60,23 @@ class Map:
             self.grid[0, y] = Map.CELL_OBSTACLE
             self.grid[self.width - 1, y] = Map.CELL_OBSTACLE
 
-        # Generates an image of the map
-        if self.render_options.render:
-            self.generate_image()
+        # Needs to regenerate the image
+        self.render_options.first_render = True
 
     def clear(self):
         # Keeps the obstacles but clears the cleaned tiles
         self.grid[self.grid == Map.CELL_CLEANED] = Map.CELL_EMPTY
-        if self.render_options.render:
-            self.generate_image()
         self.cleaning_path = []
         self.cleaned_cells_to_display = []
+
+        # Needs to regenerate the image
+        self.render_options.first_render = True
         
 
     def generate_image(self):
         """Generates an image of the map"""
         # Create image
+        print("Generating map image...")
         self.image = pygame.Surface(self.grid.shape)
         self.image.fill(self.render_options.cell_empty_color)
 
@@ -237,6 +238,9 @@ class Map:
         self.load(f"maps/map_{i}.npy")
 
     def display(self, sweeper, screen, rerender=False):
+        if self.render_options.first_render:
+            self.generate_image()
+
         tile_size = self.render_options.cell_size
         # Redraw everything
         if rerender:

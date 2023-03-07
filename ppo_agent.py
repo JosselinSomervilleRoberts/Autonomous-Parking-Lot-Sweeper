@@ -29,7 +29,7 @@ parser.add_argument("--reward_per_step", type=float, default=-0.1, help="Reward 
 parser.add_argument("--reward_per_second", type=float, default=0, help="Reward per second")
 parser.add_argument("--reward_area_total", type=float, default=10000, help="Reward factor for area")
 parser.add_argument("--reward_backwards", type=float, default=-1, help="Reward for going backwards")
-parser.add_argument("--reward_idle", type=float, default=-50, help="Reward for idling")
+parser.add_argument("--reward_idle", type=float, default=-2, help="Reward for idling")
 parser.add_argument("--done_on_collision", type=bool, default=True, help="Done on collision")
 
 # Algorithm
@@ -37,6 +37,7 @@ parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm",
 parser.add_argument("--policy", type=str, default="MultiInputPolicy", help="Policy type", choices=["MlpPolicy", "CnnPolicy", "MultiInputPolicy"])
 parser.add_argument("--total_timesteps", type=int, default=2048*128, help="Number of timesteps")
 parser.add_argument("--n_iter_learn", type=int, default=1, help="Number of times to run the learning process")
+parser.add_argument("--disable_visual_test", action="store_true", help="Disable visual test")
 
 # Algorithm specific
 parser.add_argument("--learning_rate", type=float, default=0.0003, help="Learning rate")
@@ -194,22 +195,27 @@ for j in range(args.n_iter_learn):
     # TODO: Do something for the rendering
 
     obs = vec_env.reset()
-    while True:
-        if pygame.get_init():
-            # Checks for event to close the window
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    sys.exit()
-                else:
-                    env.process_pygame_event(event)
 
-        action, _states = model.predict(obs, deterministic=True)
-        obs, reward, done, info = vec_env.step(action)
-        vec_env.render()
+    if not args.disable_visual_test:
+        while True:
+            if pygame.get_init():
+                # Checks for event to close the window
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        sys.exit()
+                    else:
+                        env.process_pygame_event(event)
 
-        # VecEnv resets automatically
-        if done:
-            obs = env.reset()
+            action, _states = model.predict(obs, deterministic=True)
+            obs, reward, done, info = vec_env.step(action)
+            vec_env.render()
+
+            # VecEnv resets automatically
+            if done:
+                obs = env.reset()
+    else:
+        print("Iter " + str(j) + ": " + str(model.test(env, n_eval_episodes=10)))
+        print("To see the visual test, run the script with the --disable-visual-test flag disabled.")
 
 
 env.close()
