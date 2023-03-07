@@ -17,28 +17,28 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--tensorboard", action="store_true", help="Enable tensorboard logging")
 parser.add_argument("--tensorboard-log", type=str, default="./ppo_tensorboard/", help="Tensorboard log dir")
 parser.add_argument("--verbose", type=int, default=1, help="Verbose mode (0: no output, 1: INFO)")
-parser.add_argument("--save_freq", type=int, default=50000, help="Save model every x steps (0: no checkpoint)")
+parser.add_argument("--save_freq", type=int, default=10000, help="Save model every x steps (0: no checkpoint)")
 parser.add_argument("--save_path", type=str, default="./models/", help="Path to save the model")
 
 # Environment
-parser.add_argument("--observation_type", type=str, default="complex", help="Observation type", choices=["simple", "grid-only", "complex"])
+parser.add_argument("--observation_type", type=str, default="complex", help="Observation type", choices=["simple", "simple-double-radar", "grid-only", "complex"])
 parser.add_argument("--action_type", type=str, default="continuous", help="Action type")
 parser.add_argument("--env_max_steps", type=int, default=5000, help="Max steps per episode")
-parser.add_argument("--env_num_radars", type=int, default=20, help="Number of radars")
+parser.add_argument("--env_num_radars", type=int, default=128, help="Number of radars")
 
 # Reward
 parser.add_argument("--reward_collision", type=float, default=-10000, help="Reward for collision")
 parser.add_argument("--reward_per_step", type=float, default=-0.1, help="Reward per step")
 parser.add_argument("--reward_per_second", type=float, default=0, help="Reward per second")
 parser.add_argument("--reward_area_total", type=float, default=10000, help="Reward factor for area")
-parser.add_argument("--reward_backwards", type=float, default=-1, help="Reward for going backwards")
-parser.add_argument("--reward_idle", type=float, default=-2, help="Reward for idling")
+parser.add_argument("--reward_backwards", type=float, default=-0.5, help="Reward for going backwards")
+parser.add_argument("--reward_idle", type=float, default=-1, help="Reward for idling")
 parser.add_argument("--not_done_on_collision", action="store_true", help="Not done on collision")
 
 # Algorithm
 parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm", choices=["PPO", "DQN", "DDPG", "TD3"])
 parser.add_argument("--policy", type=str, default="MultiInputPolicy", help="Policy type", choices=["MlpPolicy", "CnnPolicy", "MultiInputPolicy"])
-parser.add_argument("--total_timesteps", type=int, default=2048*128, help="Number of timesteps")
+parser.add_argument("--total_timesteps", type=int, default=5_120_000, help="Number of timesteps")
 parser.add_argument("--n_iter_learn", type=int, default=1, help="Number of times to run the learning process")
 parser.add_argument("--disable_visual_test", action="store_true", help="Disable visual test")
 
