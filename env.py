@@ -247,7 +247,7 @@ class SweeperEnv(gym.Env):
             # Gets only speed and radar distances
             self.observation_space = gym.spaces.Box(
                 low=np.array([sweeper_config.speed_range[0]] + [0] * (sweeper_config.num_radars)),
-                high=np.array([sweeper_config.speed_range[1]] + [sweeper_config.radar_max_distance] * (sweeper_config.num_radars)),
+                high=np.array([sweeper_config.speed_range[1]] + [1] * (sweeper_config.num_radars)),
                 dtype=np.float32
             )
         elif sweeper_config.observation_type == "grid-only":
@@ -264,13 +264,13 @@ class SweeperEnv(gym.Env):
                     low=0, high=255, shape=(self.map.width, self.map.height, 1), dtype=Map.CELL_TYPE
                 ),
                 "radars": gym.spaces.Box(
-                    low=0, high=sweeper_config.radar_max_distance, shape=(sweeper_config.num_radars,), dtype=np.float32
+                    low=0, high=1, shape=(sweeper_config.num_radars,), dtype=np.float32
                 ),
                 "position": gym.spaces.Box(
                     low=0, high=1, shape=(2,), dtype=np.float32
                 ),
                 "speed": gym.spaces.Box(
-                    low=sweeper_config.speed_range[0], high=sweeper_config.speed_range[1], shape=(1,), dtype=np.float32
+                    low=-1, high=1, shape=(1,), dtype=np.float32
                 ),
                 "direction": gym.spaces.Box(
                     low=-1, high=1, shape=(2,), dtype=np.float32
@@ -309,17 +309,17 @@ class SweeperEnv(gym.Env):
     def _get_observation(self):
         if self.sweeper_config.observation_type == 'simple':
             return np.array([
-                self.sweeper.speed,
-                *self.radar_values
+                self.sweeper.speed / self.sweeper_config.speed_range[1],
+                *self.radar_values.copy() / self.sweeper_config.radar_max_distance
             ], dtype=np.float32)
         elif self.sweeper_config.observation_type == 'grid-only':
             return self._get_grid_for_observation()
         elif self.sweeper_config.observation_type == 'complex':
             return {
                 "grid": self._get_grid_for_observation(),
-                "radars": self.radar_values.copy(),
+                "radars": self.radar_values.copy() / self.sweeper_config.radar_max_distance,
                 "position": self.sweeper.position.copy() / np.array([self.map.width, self.map.height], dtype=np.float32),
-                "speed": np.array(self.sweeper.speed, dtype=np.float32),
+                "speed": np.array(self.sweeper.speed / self.sweeper_config.speed_range[1], dtype=np.float32),
                 "direction": np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))], dtype=np.float32)
             }
         else:
@@ -731,13 +731,13 @@ if __name__ == "__main__":
             # Checks for key pressed
             keys = pygame.key.get_pressed()
             if keys[pygame.K_LEFT]:
-                steering = sweeper_config.steering_angle_range[0]
+                steering = -1
             if keys[pygame.K_RIGHT]:
-                steering = sweeper_config.steering_angle_range[1]
+                steering = 1
             if keys[pygame.K_UP]:
-                acceleration = sweeper_config.acceleration_range[1]
+                acceleration = 1
             if keys[pygame.K_DOWN]:
-                acceleration = sweeper_config.acceleration_range[0]
+                acceleration = -1
 
 
         clock.tick(60)
