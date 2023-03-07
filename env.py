@@ -330,7 +330,7 @@ class SweeperEnv(gym.Env):
             return np.array([
                 self.sweeper.speed / self.sweeper_config.speed_range[1],
                 *self.radar_values.copy() / self.sweeper_config.radar_max_distance,
-                *self.radar_values2.copy() / self.sweeper_config.radar_max_distance
+                *self.radar2_values.copy() / self.sweeper_config.radar_max_distance
             ], dtype=np.float32)
         elif self.sweeper_config.observation_type == 'grid-only':
             return self._get_grid_for_observation()
@@ -338,7 +338,7 @@ class SweeperEnv(gym.Env):
             return {
                 "grid": self._get_grid_for_observation(),
                 "radars_obstacle": self.radar_values.copy() / self.sweeper_config.radar_max_distance,
-                "radars_empy": self.radar_values2.copy() / self.sweeper_config.radar_max_distance,
+                "radars_empy": self.radar2_values.copy() / self.sweeper_config.radar_max_distance,
                 "position": self.sweeper.position.copy() / np.array([self.map.width, self.map.height], dtype=np.float32),
                 "speed": np.array(self.sweeper.speed / self.sweeper_config.speed_range[1], dtype=np.float32),
                 "direction": np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))], dtype=np.float32)
