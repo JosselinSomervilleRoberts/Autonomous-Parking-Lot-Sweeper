@@ -27,8 +27,9 @@ parser.add_argument("--env_num_radars", type=int, default=20, help="Number of ra
 parser.add_argument("--reward_collision", type=float, default=-1000, help="Reward for collision")
 parser.add_argument("--reward_per_step", type=float, default=-0.1, help="Reward per step")
 parser.add_argument("--reward_per_second", type=float, default=0, help="Reward per second")
-parser.add_argument("--reward_factor_area", type=float, default=10.0, help="Reward factor for area")
+parser.add_argument("--reward_area_total", type=float, default=10000, help="Reward factor for area")
 parser.add_argument("--reward_backwards", type=float, default=-1, help="Reward for going backwards")
+parser.add_argument("--reward_idle", type=float, default=-50, help="Reward for idling")
 parser.add_argument("--done_on_collision", type=bool, default=True, help="Done on collision")
 
 # Algorithm
@@ -89,8 +90,9 @@ env_num_radars: {args.env_num_radars}
 reward_collision: {args.reward_collision}
 reward_per_step: {args.reward_per_step}
 reward_per_second: {args.reward_per_second}
-reward_factor_area: {args.reward_factor_area}
+reward_area_total: {args.reward_area_total}
 reward_backwards: {args.reward_backwards}
+reward_idle: {args.reward_idle}
 done_on_collision: {args.done_on_collision}
 
 algorithm: {args.algorithm}
@@ -122,7 +124,7 @@ elif args.algorithm == "TD3":
 
 # Create the environment
 sweeper_config = SweeperConfig(observation_type=args.observation_type, action_type=args.action_type, num_max_steps=args.env_max_steps, num_radars=args.env_num_radars)
-reward_config = RewardConfig(done_on_collision=args.done_on_collision, reward_collision=args.reward_collision, reward_per_step=args.reward_per_step, reward_per_second=args.reward_per_second, reward_factor_area=args.reward_factor_area, reward_backwards=args.reward_backwards)
+reward_config = RewardConfig(done_on_collision=args.done_on_collision, reward_collision=args.reward_collision, reward_per_step=args.reward_per_step, reward_per_second=args.reward_per_second, reward_area_total=args.reward_area_total, reward_backwards=args.reward_backwards, reward_idle=args.reward_idle)
 render_options = RenderOptions(render=True)
 print_with_color(str(sweeper_config) + "\n", color='blue')
 print_with_color(str(reward_config) + "\n", color='yellow')
@@ -145,18 +147,18 @@ if args.tensorboard and os.name == 'posix': # Checks if os is Linux
 tensorboard_log = args.tensorboard_log if args.tensorboard else None
 model = model_type(policy=args.policy,
     env=env,
-    learning_rate=args.learning_rate,
+    # learning_rate=args.learning_rate,
     n_steps=args.n_steps,
     batch_size=args.batch_size,
     # n_epochs=args.n_epochs,
     gamma=args.gamma,
-    gae_lambda=args.gae_lambda,
+    # gae_lambda=args.gae_lambda,
     # clip_range=args.clip_range,
     # clip_range_vf=args.clip_range_vf,
     # normalize_advantage=args.normalize_advantage,
-    ent_coef=args.ent_coef,
-    vf_coef=args.vf_coef,
-    max_grad_norm=args.max_grad_norm,
+    # ent_coef=args.ent_coef,
+    # vf_coef=args.vf_coef,
+    # max_grad_norm=args.max_grad_norm,
     # use_sde=args.use_sde,
     # sde_sample_freq=args.sde_sample_freq,
     # target_kl=args.target_kl,
@@ -193,7 +195,7 @@ for j in range(args.n_iter_learn):
 
     obs = vec_env.reset()
     while True:
-        if pygame.is_init():
+        if pygame.get_init():
             # Checks for event to close the window
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
@@ -207,7 +209,7 @@ for j in range(args.n_iter_learn):
 
         # VecEnv resets automatically
         if done:
-           obs = env.reset()
+            obs = env.reset()
 
 
 env.close()

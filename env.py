@@ -47,7 +47,7 @@ class Sweeper:
         self.conf = sweeper_config
 
         # Linear
-        self.position = np.array([0., 0.])
+        self.position = np.array([0., 0.], dtype=np.float32)
         self.speed = 0.
         self.acceleration = 0.
         self.friction = sweeper_config.friction
@@ -75,7 +75,7 @@ class Sweeper:
         if abs(self.speed) < 0.1: self.speed = 0.
         self.angle += self.angle_speed * dt
         angle = self.angle * np.pi / 180.
-        self.position += self.speed * dt * np.array([np.cos(angle), np.sin(angle)])
+        self.position += self.speed * dt * np.array([np.cos(angle), np.sin(angle)], dtype=np.float32)
 
     def get_bounding_box(self, factor = 1.):
         # Get bounding box of the sweeper (the position is the center of the sweeper)
@@ -315,16 +315,16 @@ class SweeperEnv(gym.Env):
             return np.array([
                 self.sweeper.speed,
                 *self.radar_values
-            ])
+            ], dtype=np.float32)
         elif self.sweeper_config.observation_type == 'grid-only':
             return self._get_grid_for_observation()
         elif self.sweeper_config.observation_type == 'complex':
             return {
                 "grid": self._get_grid_for_observation(),
                 "radars": self.radar_values.copy(),
-                "position": self.sweeper.position.copy() / np.array([self.map.width, self.map.height]),
-                "speed": self.sweeper.speed,
-                "direction": np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))])
+                "position": self.sweeper.position.copy() / np.array([self.map.width, self.map.height], dtype=np.float32),
+                "speed": np.array(self.sweeper.speed, dtype=np.float32),
+                "direction": np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))], dtype=np.float32)
             }
         else:
             raise Exception("Unknown observation type: " + self.sweeper_config.observation_type)
@@ -407,7 +407,12 @@ class SweeperEnv(gym.Env):
         front_position = self.sweeper.get_front_position()
         new_area = self.map.apply_cleaning(front_position, width=1.6*self.sweeper.size[1], resolution=self.resolution)
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
-        reward = self.reward_config.reward_factor_area * new_area + self.reward_config.reward_per_second * dt + self.reward_config.reward_per_step
+        factor = (1. + self.stats.percentage_cleaned / 100.) ** 2
+        reward = (3./7) * factor * self.reward_config.reward_area_total * new_area / self.stats.area_empty
+        if abs(acceleration) < 0.05 * self.sweeper_config.acceleration_range[1] and abs(steering) < 0.05 * self.sweeper_config.steering_angle_range[1]:
+            reward += self.reward_config.reward_idle
+        # (3./7) comes fron the integral of (1+x)^2 over [0,1] (factor)
+        reward += self.reward_config.reward_per_second * dt + self.reward_config.reward_per_step
         if had_collision:
             reward += self.reward_config.reward_collision
         if self.sweeper.speed < 0:
@@ -444,13 +449,13 @@ class SweeperEnv(gym.Env):
 
         # Radars
         self.radars = [Radar(i, self.sweeper_config, self.resolution) for i in range(self.sweeper_config.num_radars)]
-        self.radar_values = np.zeros(self.sweeper_config.num_radars)
+        self.radar_values = np.zeros(self.sweeper_config.num_radars, dtype=np.float32)
 
         # Reset sweeper by setting it's position to a random empty cell
         empty_cells = self.map.get_empty_tiles()
         collision = True
         while collision:
-            self.sweeper.position = empty_cells[np.random.randint(len(empty_cells))].astype(float)
+            self.sweeper.position = empty_cells[np.random.randint(len(empty_cells))].astype(np.float32)
             collision = self.check_collision()
             self.compute_radars()
             if len(np.where(self.radar_values < self.sweeper_config.spawn_min_distance_to_wall)[0]) > 0:
@@ -686,6 +691,7 @@ if __name__ == "__main__":
     sweeper_config = SweeperConfig()
     env = SweeperEnv(sweeper_config=sweeper_config, reward_config=RewardConfig(), render_options=RenderOptions(), resolution = 2.0, debug=False)
     observation = env.reset(new_map=True, generate_new_map=False)
+    print(env.action_space)
     rewards = []
     cum_rewards = []
     cum_reward = 0

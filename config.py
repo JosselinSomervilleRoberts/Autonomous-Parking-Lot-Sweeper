@@ -41,16 +41,17 @@ class SweeperConfig:
 @dataclass
 class RewardConfig:
     """Configuration for the reward function."""
-    reward_factor_area     : float = 1.0
-    reward_collision        : float = -100.0
-    reward_per_second       : float = -0.1
-    reward_per_step         : float = 0
-    reward_backwards        : float = -0.1
+    reward_area_total       : float = 10000
+    reward_collision        : float = -1000.0
+    reward_per_second       : float = 0
+    reward_per_step         : float = -0.1
+    reward_backwards        : float = -1.0
+    reward_idle             : float = -50.0
     done_on_collision       : bool  = False
 
     def __str__(self):
         return f"""RewardConfig(
-    reward_factor_area      : {self.reward_factor_area}
+    reward_area_total       : {self.reward_area_total}
     reward_collision        : {self.reward_collision}
     reward_per_second       : {self.reward_per_second}
     reward_per_step         : {self.reward_per_step}
