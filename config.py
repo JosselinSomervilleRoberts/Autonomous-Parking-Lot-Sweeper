@@ -7,7 +7,7 @@ class SweeperConfig:
     """Configuration for the sweeper speed."""
     action_frequency        : int                 = 15          # frames per second
     num_max_steps           : int                 = 9999        # number of steps before the episode ends
-    observation_type        : str                 = 'simple'    # 'simple', 'grid-only', 'complex'
+    observation_type        : str                 = 'simple-double-radar'    # 'simple', 'grid-only', 'complex'
     action_type             : str                 = 'continuous'# 'continuous', 'discrete-minimum', 'discrete', 'multi-discrete'
     acceleration_range      : Tuple[float, float] = (-30, 30)   # units/s**2
     speed_range             : Tuple[float, float] = (-6, 12)    # units/s
@@ -17,7 +17,7 @@ class SweeperConfig:
     # num_radars[i,j] is the the number of radars for the i-th cell value with a radius of j
     # Same for radar_max_distance
     num_radars              : np.array            = np.array([[32,24,16,16,16,16], [16,0,16,0,16,0], [0,0,16,0,16,0]]) # count
-    radar_max_distance      : np.array            = np.array([[4,7,10,15,20,25], [10,12,15,20,20,20], [4,7,10,15,15,15]]) # units
+    radar_max_distance      : np.array            = 2 * np.array([[4,7,10,15,20,25], [10,12,15,20,20,20], [4,7,10,15,15,15]]) # units
     spawn_min_distance_to_wall : float            = 2.5         # units
 
     def scale(self, resolution):
@@ -146,7 +146,7 @@ class RenderOptions:
     show_radars_empty : int = -1
     radars_empty_color : Tuple[int, int, int] = (0, 255, 255)
     show_radars_cleaned : int = -1
-    radars_cleaned_color: Tuple[int, int, int] = (0, 255, 0)
+    radars_cleaned_color: Tuple[int, int, int] = (255, 0, 0)
 
     def __str__(self):
         return f"""RenderOptions(

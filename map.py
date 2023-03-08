@@ -37,7 +37,12 @@ def subtract_array_at(big_array, small_array, x, y, r = None):
     return big_array
 
 def add_array_at(big_array, small_array, x, y, r = None):
-    return subtract_array_at(big_array, -small_array, x, y, r)
+    if r is None: r = (small_array.shape[0] - 1) // 2
+    xmin, xmax = max(x - r, 0), min(x + r + 1, big_array.shape[0])
+    ymin, ymax = max(y - r, 0), min(y + r + 1, big_array.shape[1])
+    x_offset, y_offset = -(x - r - xmin), -(y - r - ymin)
+    big_array[xmin:xmax, ymin:ymax] += small_array[x_offset:x_offset + (xmax - xmin), y_offset:y_offset + (ymax - ymin)]
+    return big_array
 
 
 
@@ -383,32 +388,36 @@ class Map:
         return nb_cells_in_circle_with_value / (np.pi * radius**2) > min_ratio
 
 
-    def compute_distance_to_closest_match(self, pos: Tuple[float, float], rad_angle: float, match_fn: Callable[[int,int], bool], step: float = 1., max_distance: float = 1000, set_max_on_out_of_bounds: bool = True, precision: float = 0.1) -> float:
+    def compute_distance_to_closest_match(self, pos: Tuple[float, float], rad_angle: float, match_fn: Callable[[int,int], bool], step: float = 1., max_distance: float = 1000, set_minus_one_on_out_of_bounds: bool = True, precision: float = 0.1, min_distance: float = 0.0) -> float:
         """Returns the distance to the closest point that matches the given function"""
         # Compute the direction vector
         direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
 
         # Compute the distance to the closest obstacle using a step by step approach
         d = max_distance
-        for distance in np.arange(step, max_distance + step, step):
+        found = False
+        for distance in np.arange(max(step, min_distance), max_distance + step, step):
             # Check if the next cell is an obstacle
             next_cell = pos + distance * direction
             
             # Round and check if within bounds
             rounded_cell = [int(next_cell[0]), int(next_cell[1])]
             if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
-                if set_max_on_out_of_bounds: return max_distance
+                if set_minus_one_on_out_of_bounds: return -1
                 d = distance-step
+                found = True
                 break
             elif match_fn(rounded_cell[0], rounded_cell[1]):
                 d = distance-step
+                found = True
                 break
+        if not found: return -1
 
         # If the distance is not max_distance, then we found a cell with the right value
         # We refine the value with a binary search
         if d < max_distance:
             # Binary search
-            d_min = d - step
+            d_min = max(min_distance, d - step)
             d_max = d + step
             while d_max - d_min > precision:
                 d_mid = (d_min + d_max) / 2
@@ -425,13 +434,13 @@ class Map:
         return min(d, max_distance)
 
 
-    def compute_distance_to_closest_zone_of_value(self, pos, radius:int, rad_angle: float, value:int, max_distance: float = 1000, min_ratio: float = 0.8) -> float:
+    def compute_distance_to_closest_zone_of_value(self, pos, radius:int, rad_angle: float, value:int, max_distance: float = 1000, min_ratio: float = 0.8, set_minus_one_on_out_of_bounds: bool = True, min_distance: float = 0.0) -> float:
         """Returns the distance to the closest obstacle in the given direction using th precomputed self.C"""
         def match_fn(x, y):
             return self.cum[self.i_cum[value], radius, x, y] / self.nb_element_in_radius[radius] > min_ratio
         precision = 0.1 * (radius + 1)
         step = max(1, radius)
-        return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=step, max_distance=max_distance, set_max_on_out_of_bounds=True, precision=precision)
+        return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=step, max_distance=max_distance, set_minus_one_on_out_of_bounds=set_minus_one_on_out_of_bounds, precision=precision, min_distance=min_distance)
 
     def compute_distance_to_closest_zone_of_value_slow(self, pos, radius:float, rad_angle: float, value: int, max_distance: float = 1000, min_ratio: float = 0.5) -> float:
         """Returns the distance to the closest obstacle in the given direction
