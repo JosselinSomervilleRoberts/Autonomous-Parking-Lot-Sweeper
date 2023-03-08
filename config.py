@@ -4,6 +4,7 @@ from dataclasses import dataclass
 @dataclass
 class SweeperConfig:
     """Configuration for the sweeper speed."""
+    action_frequency        : int                 = 15          # frames per second
     num_max_steps           : int                 = 9999        # number of steps before the episode ends
     observation_type        : str                 = 'simple'    # 'simple', 'grid-only', 'complex'
     action_type             : str                 = 'continuous'# 'continuous', 'discrete-minimum', 'discrete', 'multi-discrete'
@@ -24,6 +25,7 @@ class SweeperConfig:
 
     def __str__(self):
         return f"""SweeperConfig(
+    action_frequency           : {self.action_frequency}
     num_max_steps              : {self.num_max_steps}
     observation_type           : {self.observation_type}
     action_type                : {self.action_type}

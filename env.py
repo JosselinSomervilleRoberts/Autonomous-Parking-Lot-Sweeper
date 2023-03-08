@@ -59,7 +59,8 @@ class Sweeper:
         # Vehicle size
         self.size = np.array([sweeper_config.sweeper_size[0], sweeper_config.sweeper_size[1]])
 
-    def update_position(self, acceleration, steering, dt=1./60.):
+    def update_position(self, acceleration, steering, dt=None):
+        if dt is None: dt = 1. / self.conf.action_frequency
         # Set acceleration and steering
         self.acceleration = max(min(acceleration, self.conf.acceleration_range[1]), self.conf.acceleration_range[0])
         self.angle_speed = max(min(steering, self.conf.steering_angle_range[1]), self.conf.steering_angle_range[0])
@@ -183,7 +184,11 @@ class Radar:
         rad_angle = self.get_rad_angle(sweeper)
         position = self.get_position(sweeper, rad_angle=rad_angle)
         # Get the distance to the closest obstacle
-        dist = map.compute_distance_to_closest_cell_of_value(position, rad_angle, value=self.value, max_distance=self.range) / self.resolution
+        dist = None
+        if self.value == Map.CELL_OBSTACLE:
+            dist = map.compute_distance_to_closest_cell_of_value(position, rad_angle, value=self.value, max_distance=self.range) / self.resolution
+        else:
+            dist = map.compute_distance_to_closest_zone_of_value(pos=position, rad_angle=rad_angle, value=Map.CELL_EMPTY, radius=7,min_ratio=0.9) / self.resolution
         self.distance = dist
         return dist
     
@@ -313,6 +318,9 @@ class SweeperEnv(gym.Env):
                 self.map.load_random()
         else:
             self.map.clear()
+        print("Starting map:")
+        self.map.compute_matrix_cum(max_radius=7)
+        print("Finished computing number of empty cells in a radius matrix")
 
         # Create sweeper
         self.sweeper = Sweeper(sweeper_config)
@@ -330,7 +338,7 @@ class SweeperEnv(gym.Env):
             return np.array([
                 self.sweeper.speed / self.sweeper_config.speed_range[1],
                 *self.radar_values.copy() / self.sweeper_config.radar_max_distance,
-                *self.radar2_values.copy() / self.sweeper_config.radar_max_distance
+                *[min(1., 3 * val / self.sweeper_config.radar_max_distance) for val in self.radar2_values]
             ], dtype=np.float32)
         elif self.sweeper_config.observation_type == 'grid-only':
             return self._get_grid_for_observation()
@@ -387,8 +395,9 @@ class SweeperEnv(gym.Env):
             )
 
 
-    def step(self, action, dt=1./60):
+    def step(self, action, dt=None):
         """Returns (observation, reward, terminated, info)"""
+        if dt is None: dt = 1. / self.sweeper_config.action_frequency
         dt *= self.render_options.simulation_speed
 
         # Update sweeper
@@ -425,7 +434,7 @@ class SweeperEnv(gym.Env):
         # Compute reward
         # Position of front of sweeper
         front_position = self.sweeper.get_front_position()
-        new_area = self.map.apply_cleaning(front_position, width=1.6*self.sweeper.size[1], resolution=self.resolution)
+        new_area = self.map.apply_cleaning(front_position, width=2.6*self.sweeper.size[1], resolution=self.resolution)
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
         factor = (1. + self.stats.percentage_cleaned / 100.) ** 2
         reward = (3./7) * factor * self.reward_config.reward_area_total * new_area / self.stats.area_empty
@@ -743,10 +752,11 @@ if __name__ == "__main__":
 
     clock = pygame.time.Clock()
     last_time_sec = time.time()
+    last_action_time_sec = time.time() - 1./ env.sweeper_config.action_frequency
+    steering = 0
+    acceleration = 0
 
     while True:
-        steering = 0
-        acceleration = 0
 
         # Edit map
         if pygame.get_init():
@@ -773,18 +783,24 @@ if __name__ == "__main__":
                     env.process_pygame_event(event)
 
             # Checks for key pressed
-            keys = pygame.key.get_pressed()
-            if keys[pygame.K_LEFT]:
-                steering = -1
-            if keys[pygame.K_RIGHT]:
-                steering = 1
-            if keys[pygame.K_UP]:
-                acceleration = 1
-            if keys[pygame.K_DOWN]:
-                acceleration = -1
+            t = time.time()
+            dt_action = t - last_action_time_sec
+            if True:#dt_action > 1. / env.sweeper_config.action_frequency:
+                steering = 0
+                acceleration = 0
+                keys = pygame.key.get_pressed()
+                if keys[pygame.K_LEFT]:
+                    steering = -1
+                if keys[pygame.K_RIGHT]:
+                    steering = 1
+                if keys[pygame.K_UP]:
+                    acceleration = 1
+                if keys[pygame.K_DOWN]:
+                    acceleration = -1
+                last_action_time_sec = t
 
 
-        clock.tick(60)
+        clock.tick(sweeper_config.action_frequency)
         action = (acceleration, steering)
         # TODO: Use a random action. This is just for the baseline model
         # action = env.action_space.sample()

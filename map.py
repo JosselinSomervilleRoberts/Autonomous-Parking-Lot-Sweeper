@@ -15,7 +15,7 @@
 # axis aligned bounding box of the rectangle is colliding with the map. If it is, then
 # a second pass is done to check if the rotated rectangle is colliding with the map.
 
-from typing import Tuple, List
+from typing import Tuple, List, Callable
 from shapely.geometry import Polygon, Point, LineString
 from random_shape import get_random_shapely_outline
 from metrics import get_patch_of_line
@@ -23,7 +23,20 @@ import numpy as np
 import random
 import pygame
 import os
+from scipy import signal
 from config import RenderOptions
+from user_utils import warn
+
+
+def subtract_array_at(big_array, small_array, x, y, r = None):
+    if r is None: r = (small_array.shape[0] - 1) // 2
+    xmin, xmax = max(x - r, 0), min(x + r + 1, big_array.shape[0])
+    ymin, ymax = max(y - r, 0), min(y + r + 1, big_array.shape[1])
+    x_offset, y_offset = -(x - r - xmin), -(y - r - ymin)
+    big_array[xmin:xmax, ymin:ymax] -= small_array[x_offset:x_offset + (xmax - xmin), y_offset:y_offset + (ymax - ymin)]
+    return big_array
+
+
 
 class Map:
 
@@ -42,6 +55,49 @@ class Map:
         self.grid = np.zeros((width, height), dtype=Map.CELL_TYPE)
         self.cleaning_path = []
         self.cleaned_cells_to_display = []
+
+    def compute_matrix_cum(self, max_radius: int):
+        """Computes a Matrix cum of shape (3, max_radius+1, width, height) such that
+        self.cum[self.i_cum[val], r, x, y] is the number of cells in a radius r
+        around (x, y) that are equal to val."""
+        
+        # Create self.cum a matrix of shape (3, max_radius+1, width, height) filled with zeros
+        # Warning we use np.uint8 to store the number of cells in a radius
+        # This means that the maximum number of cells in a radius is 255
+        # which corresponds to a radius of pi * r^2 = 255 -> r = 9
+        self.i_cum = {Map.CELL_EMPTY: 0, Map.CELL_OBSTACLE: 1, Map.CELL_CLEANED: 2}
+        self.cum = np.zeros((3, max_radius+1, self.width, self.height), dtype=np.uint8)
+        self.nb_element_in_radius = np.zeros(max_radius+1, dtype=np.uint8)
+
+        # Create a list of kernels
+        self.kernels = []
+        # For each radius r
+        for r in range(max_radius+1):
+            # Create a kernel of shape (2r+1, 2r+1) filled with zeros
+            kernel = np.zeros((2*r+1, 2*r+1), dtype=np.uint8)
+            self.kernels.append(kernel)
+            # Fill the kernel with ones in a circle of radius r
+            for x in range(2*r+1):
+                for y in range(2*r+1):
+                    if (x-r)**2 + (y-r)**2 <= r**2:
+                        kernel[x, y] = 1
+                        self.nb_element_in_radius[r] += 1
+
+        # Compule the matrix cum
+        for cell_value in self.i_cum.keys():
+            idx = self.i_cum[cell_value]
+
+            # Gets an array is_equal_to_value of shape (width, height) such that
+            # is_equal_to_value[x, y] is True if the cell (x, y) is equal to cell_value
+            is_equal_to_value = self.grid == cell_value
+
+            # For each radius r
+            for r in range(max_radius+1):
+                # Apply the kernel to the is_empty is_equal_to_value to get the number of celles
+                # equal to cell_value in a radius r around each cell
+                self.cum[idx, r] = np.uint8(
+                    signal.convolve2d(is_equal_to_value, self.kernels[r], mode="same", boundary="fill", fillvalue=0)
+                )
 
     def init_random(self):
         # print("Generating random map...")
@@ -145,7 +201,10 @@ class Map:
                 if self.grid[x, y] == Map.CELL_EMPTY and polygon.contains(Point(x, y)):
                     self.grid[x, y] = value
                     self.cleaned_cells_to_display.append((x, y))
-                    count += 1
+                    for r in range(len(self.kernels)):
+                        subtract_array_at(self.cum[self.i_cum[Map.CELL_EMPTY],r], self.kernels[r], x=x, y=y, r=r)
+
+
         return count
 
     def fill_polygon(self, polygon: Polygon, value: int, grid: np.ndarray = None):
@@ -272,19 +331,6 @@ class Map:
                         pygame.draw.rect(screen, cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
 
-    def clean(self, rect: Polygon):
-        # Get bounding box
-        min_x = int(rect.bounds[0])
-        min_y = int(rect.bounds[1])
-        max_x = int(rect.bounds[2])
-        max_y = int(rect.bounds[3])
-
-        # Clean tiles
-        for x in range(min_x, max_x):
-            for y in range(min_y, max_y):
-                if rect.contains(Point(x, y)):
-                    self.grid[x, y] = Map.CELL_CLEANED
-
     def set_cell_value(self, x, y, value):
         self.grid[x, y] = value
         self.render_options.first_render = True
@@ -300,17 +346,135 @@ class Map:
                 pygame.draw.rect(self.image, self.render_options.cell_cleaned_color, pygame.Rect(x * tile_size, y * tile_size, tile_size, tile_size))
 
     def get_cleaned_area(self, resolution=1.0) -> float:
-        return len(self.get_cleaned_tiles()) / resolution
+        return len(self.get_cleaned_tiles()) / resolution**2
 
     def get_empty_area(self, resolution=1.0) -> float:
-        return len(self.get_empty_tiles()) / resolution
+        return len(self.get_empty_tiles()) / resolution**2
 
     def compute_distance_to_closest_obstacle(self, pos, rad_angle, max_distance=1000):
         return self.compute_distance_to_closest_cell_of_value(self, pos, rad_angle, value=Map.CELL_OBSTACLE, max_distance=max_distance)
 
+    def check_zone_value(self, x_center: float, y_center: float, radius: float, value: int, min_ratio: float = 0.5) -> bool:
+        """Check if a zone is made of a certain value by a certain ratio.
+        WARNING: This function is slow, use it only for debugging.
+        Otherwise try to precompute the zone and store it like self.cum"""
+        warn("This function is slow, use it only for debugging. Otherwise try to precompute the zone and store it like self.cum")
+        # Smart nested for loop that only checks the cells that are in the circle
+        # Compute the bounding box
+        x_min = max(0, int(x_center - radius))
+        y_min = max(0, int(y_center - radius))
+        x_max = min(self.width, int(x_center + radius))
+        y_max = min(self.height, int(y_center + radius))
+
+        # Count the number of cells that are in the circle
+        nb_cells_in_circle = 0
+        nb_cells_in_circle_with_value = 0
+        for x in range(x_min, x_max):
+            for y in range(y_min, y_max):
+                # Check if the cell is in the circle
+                if (x - x_center)**2 + (y - y_center)**2 < radius**2:
+                    nb_cells_in_circle += 1
+                    if self.grid[x, y] == value:
+                        nb_cells_in_circle_with_value += 1
+
+        # Check if the ratio is above the threshold
+        return nb_cells_in_circle_with_value / (np.pi * radius**2) > min_ratio
+
+
+    def compute_distance_to_closest_match(self, pos: Tuple[float, float], rad_angle: float, match_fn: Callable[[int,int], bool], step: float = 1., max_distance: float = 1000, set_max_on_out_of_bounds: bool = True, precision: float = 0.1) -> float:
+        """Returns the distance to the closest point that matches the given function"""
+        # Compute the direction vector
+        direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
+
+        # Compute the distance to the closest obstacle using a step by step approach
+        d = max_distance
+        for distance in np.arange(step, max_distance + step, step):
+            # Check if the next cell is an obstacle
+            next_cell = pos + distance * direction
+            
+            # Round and check if within bounds
+            rounded_cell = [int(next_cell[0]), int(next_cell[1])]
+            if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
+                if set_max_on_out_of_bounds: return max_distance
+                d = distance-step
+                break
+            elif match_fn(rounded_cell[0], rounded_cell[1]):
+                d = distance-step
+                break
+
+        # If the distance is not max_distance, then we found a cell with the right value
+        # We refine the value with a binary search
+        if d < max_distance:
+            # Binary search
+            d_min = d - step
+            d_max = d + step
+            while d_max - d_min > precision:
+                d_mid = (d_min + d_max) / 2
+                next_cell = pos + d_mid * direction
+                rounded_cell = [int(next_cell[0]), int(next_cell[1])]
+                if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
+                    d_max = d_mid
+                elif match_fn(rounded_cell[0], rounded_cell[1]):
+                    d_max = d_mid
+                else:
+                    d_min = d_mid
+
+            d = d_min
+        return min(d, max_distance)
+
+
+    def compute_distance_to_closest_zone_of_value(self, pos, radius:int, rad_angle: float, value:int, max_distance: float = 1000, min_ratio: float = 0.8) -> float:
+        """Returns the distance to the closest obstacle in the given direction using th precomputed self.C"""
+        def match_fn(x, y):
+            return self.cum[self.i_cum[value], radius, x, y] / self.nb_element_in_radius[radius] > min_ratio
+        precision = 0.1 * (radius + 1)
+        return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=radius, max_distance=max_distance, set_max_on_out_of_bounds=True, precision=precision)
+
+    def compute_distance_to_closest_zone_of_value_slow(self, pos, radius:float, rad_angle: float, value: int, max_distance: float = 1000, min_ratio: float = 0.5) -> float:
+        """Returns the distance to the closest obstacle in the given direction
+        WARNING: This function is slow, use it only for debugging.
+        Otherwise try to precompute the zone and store it like self.cum"""
+        warn("This function is slow, use it only for debugging. Otherwise try to precompute the zone and store it like self.cum")
+        # Compute the direction vector
+        direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
+
+        # Compute the distance to the closest obstacle using a step by step approach
+        d = max_distance
+        for distance in range(1, max_distance, int(radius)):
+            # Check if the next cell is an obstacle
+            next_cell = pos + distance * direction
+            
+            # Round and check if within bounds
+            rounded_cell = [int(next_cell[0]), int(next_cell[1])]
+            if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
+                d = distance-radius
+                break
+            if self.check_zone_value(rounded_cell[0], rounded_cell[1], radius, value, min_ratio):
+                d = distance-radius
+                break
+
+        # If the distance is not max_distance, then we found a cell with the right value
+        # We refine the value with a binary search
+        if d != max_distance:
+            # Binary search
+            d_min = d - radius
+            d_max = d + radius
+            while d_max - d_min > 0.1:
+                d_mid = (d_min + d_max) / 2
+                next_cell = pos + d_mid * direction
+                rounded_cell = [int(next_cell[0]), int(next_cell[1])]
+                if self.check_zone_value(rounded_cell[0], rounded_cell[1], radius, value, min_ratio):
+                    d_max = d_mid
+                else:
+                    d_min = d_mid
+
+            d = d_min
+        return d
+    
     def compute_distance_to_closest_cell_of_value(self, pos, rad_angle, value, max_distance=1000):
         """Returns the distance to the closest obstacle in the given direction"""
         # Compute the direction vector
+        warn("This function is deprecated, use compute_distance_to_closest_zone_of_value with a radius of 0 instead")
         direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
 
         # Compute the distance to the closest obstacle using a step by step approach
@@ -328,7 +492,7 @@ class Map:
                 d = distance - 1
                 break
         
-        # If the distance is not max_distance, then we found an obstacle
+        # If the distance is not max_distance, then we found a cell with the right value
         # We refine the value with a binary search
         if d != max_distance:
             # Binary search

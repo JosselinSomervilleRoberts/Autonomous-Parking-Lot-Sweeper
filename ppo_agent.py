@@ -1,5 +1,5 @@
 import sys
-from stable_baselines3 import PPO, DQN, DDPG, TD3
+from stable_baselines3 import PPO, DQN, DDPG, TD3, SAC, A2C
 from stable_baselines3.common.callbacks import CheckpointCallback
 from env import SweeperEnv
 from config import SweeperConfig, RewardConfig, RenderOptions
@@ -17,26 +17,27 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--tensorboard", action="store_true", help="Enable tensorboard logging")
 parser.add_argument("--tensorboard-log", type=str, default="./ppo_tensorboard/", help="Tensorboard log dir")
 parser.add_argument("--verbose", type=int, default=1, help="Verbose mode (0: no output, 1: INFO)")
-parser.add_argument("--save_freq", type=int, default=10000, help="Save model every x steps (0: no checkpoint)")
+parser.add_argument("--save_freq", type=int, default=50000, help="Save model every x steps (0: no checkpoint)")
 parser.add_argument("--save_path", type=str, default="./models/", help="Path to save the model")
+parser.add_argument("--load_path", type=str, default=None, help="Path to load the model")
 
 # Environment
 parser.add_argument("--observation_type", type=str, default="complex", help="Observation type", choices=["simple", "simple-double-radar", "grid-only", "complex"])
 parser.add_argument("--action_type", type=str, default="continuous", help="Action type")
-parser.add_argument("--env_max_steps", type=int, default=5000, help="Max steps per episode")
-parser.add_argument("--env_num_radars", type=int, default=24, help="Number of radars")
+parser.add_argument("--env_max_steps", type=int, default=1024, help="Max steps per episode")
+parser.add_argument("--env_num_radars", type=int, default=16, help="Number of radars")
 
 # Reward
-parser.add_argument("--reward_collision", type=float, default=-10000, help="Reward for collision")
+parser.add_argument("--reward_collision", type=float, default=-1024, help="Reward for collision")
 parser.add_argument("--reward_per_step", type=float, default=-0.1, help="Reward per step")
 parser.add_argument("--reward_per_second", type=float, default=0, help="Reward per second")
-parser.add_argument("--reward_area_total", type=float, default=10000, help="Reward factor for area")
+parser.add_argument("--reward_area_total", type=float, default=4096, help="Reward factor for area")
 parser.add_argument("--reward_backwards", type=float, default=-0.5, help="Reward for going backwards")
-parser.add_argument("--reward_idle", type=float, default=-1, help="Reward for idling")
+parser.add_argument("--reward_idle", type=float, default=-0.2, help="Reward for idling")
 parser.add_argument("--not_done_on_collision", action="store_true", help="Not done on collision")
 
 # Algorithm
-parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm", choices=["PPO", "DQN", "DDPG", "TD3"])
+parser.add_argument("--algorithm", type=str, default="PPO", help="RL Algorithm", choices=["PPO", "DQN", "DDPG", "TD3", "SAC", "A2C"])
 parser.add_argument("--policy", type=str, default="MultiInputPolicy", help="Policy type", choices=["MlpPolicy", "CnnPolicy", "MultiInputPolicy"])
 parser.add_argument("--total_timesteps", type=int, default=5_120_000, help="Number of timesteps")
 parser.add_argument("--n_iter_learn", type=int, default=1, help="Number of times to run the learning process")
@@ -124,6 +125,10 @@ elif args.algorithm == "DDPG":
     model_type = DDPG
 elif args.algorithm == "TD3":
     model_type = TD3
+elif args.algorithm == "SAC":
+    model_type = SAC
+elif args.algorithm == "A2C":
+    model_type = A2C
 
 
 # Create the environment
@@ -152,9 +157,9 @@ checkpoint_callback = CheckpointCallback(save_freq=args.save_freq, save_path=arg
 tensorboard_log = args.tensorboard_log if args.tensorboard else None
 model = model_type(policy=args.policy,
     env=env,
-    learning_rate=args.learning_rate,
+    # learning_rate=args.learning_rate,
     #n_steps=args.n_steps,
-    batch_size=args.batch_size,
+    # batch_size=args.batch_size,
     # n_epochs=args.n_epochs,
     gamma=args.gamma,
     # gae_lambda=args.gae_lambda,
@@ -168,7 +173,7 @@ model = model_type(policy=args.policy,
     # sde_sample_freq=args.sde_sample_freq,
     # target_kl=args.target_kl,
     tensorboard_log=tensorboard_log,
-    policy_kwargs={"net_arch": [128,256,256,128]},
+    # policy_kwargs={"net_arch": [128,256,256,128]},
     verbose=args.verbose,
     # seed=args.seed,
     # device=args.device,
@@ -189,10 +194,15 @@ print("")
 
 for j in range(args.n_iter_learn):
     # Train the agent
-    model.learn(total_timesteps=args.total_timesteps, callback=[checkpoint_callback])
-
-    # Save the agent
-    model.save(args.save_path + args.algorithm + "_model_" + str(j))
+    if args.load_path is None:
+        print_with_color("Training model " + str(j) + " of " + str(args.n_iter_learn) + "...", color='green')
+        model.learn(total_timesteps=args.total_timesteps, callback=[checkpoint_callback])
+        # Save the agent
+        model.save(args.save_path + args.algorithm + "_model_" + str(j))
+    else:
+        print("Loading model from " + args.load_path)
+        #help(model.load)
+        model.set_parameters(args.load_path) 
 
     # Test the agent
     vec_env = model.get_env()
@@ -201,6 +211,7 @@ for j in range(args.n_iter_learn):
     obs = vec_env.reset()
 
     if not args.disable_visual_test:
+        clock = pygame.time.Clock()
         while True:
             if pygame.get_init():
                 # Checks for event to close the window
@@ -209,6 +220,7 @@ for j in range(args.n_iter_learn):
                         sys.exit()
                     else:
                         env.process_pygame_event(event)
+            clock.tick(sweeper_config.action_frequency)
 
             action, _states = model.predict(obs, deterministic=True)
             obs, reward, done, info = vec_env.step(action)
@@ -216,7 +228,7 @@ for j in range(args.n_iter_learn):
 
             # VecEnv resets automatically
             if done:
-                obs = env.reset()
+                obs = vec_env.reset()
     else:
         print("Iter " + str(j) + "done")
         print("To see the visual test, run the script with the --disable-visual-test flag disabled.")
