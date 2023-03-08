@@ -439,7 +439,7 @@ class Map:
         def match_fn(x, y):
             return self.cum[self.i_cum[value], radius, x, y] / self.nb_element_in_radius[radius] > min_ratio
         precision = 0.1 * (radius + 1)
-        step = max(1, radius)
+        step = max(0.4, radius)
         return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=step, max_distance=max_distance, set_minus_one_on_out_of_bounds=set_minus_one_on_out_of_bounds, precision=precision, min_distance=min_distance)
 
     def compute_distance_to_closest_zone_of_value_slow(self, pos, radius:float, rad_angle: float, value: int, max_distance: float = 1000, min_ratio: float = 0.5) -> float:

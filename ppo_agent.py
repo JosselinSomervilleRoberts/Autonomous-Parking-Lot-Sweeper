@@ -9,7 +9,13 @@ from tqdm import tqdm
 import os
 import pygame
 from user_utils import print_with_color, ask_yes_no_question, warn, error
-
+import torch.nn as nn
+import torch
+import torch.nn.functional as F
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+import gym
+from stable_baselines3.common.env_checker import check_env
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 parser = argparse.ArgumentParser()
 
@@ -22,10 +28,9 @@ parser.add_argument("--save_path", type=str, default="./models/", help="Path to 
 parser.add_argument("--load_path", type=str, default=None, help="Path to load the model")
 
 # Environment
-parser.add_argument("--observation_type", type=str, default="complex", help="Observation type", choices=["simple", "simple-double-radar", "grid-only", "complex"])
-parser.add_argument("--action_type", type=str, default="continuous", help="Action type")
-parser.add_argument("--env_max_steps", type=int, default=1024, help="Max steps per episode")
-parser.add_argument("--env_num_radars", type=int, default=16, help="Number of radars")
+parser.add_argument("--observation_type", type=str, default="simple-radar-cnn", help="Observation type", choices=["simple", "simple-double-radar", "simple-radar-cnn", "grid-only", "complex"])
+parser.add_argument("--action_type", type=str, default="discrete-5", help="Action type")
+parser.add_argument("--env_max_steps", type=int, default=2048, help="Max steps per episode")
 
 # Reward
 parser.add_argument("--reward_collision", type=float, default=-1024, help="Reward for collision")
@@ -90,7 +95,6 @@ verbose: {args.verbose}
 observation_type: {args.observation_type}
 action_type: {args.action_type}
 env_max_steps: {args.env_max_steps}
-env_num_radars: {args.env_num_radars}
 
 reward_collision: {args.reward_collision}
 reward_per_step: {args.reward_per_step}
@@ -132,7 +136,7 @@ elif args.algorithm == "A2C":
 
 
 # Create the environment
-sweeper_config = SweeperConfig(observation_type=args.observation_type, action_type=args.action_type, num_max_steps=args.env_max_steps, num_radars=args.env_num_radars)
+sweeper_config = SweeperConfig(observation_type=args.observation_type, action_type=args.action_type, num_max_steps=args.env_max_steps)
 reward_config = RewardConfig(done_on_collision=(not args.not_done_on_collision), reward_collision=args.reward_collision, reward_per_step=args.reward_per_step, reward_per_second=args.reward_per_second, reward_area_total=args.reward_area_total, reward_backwards=args.reward_backwards, reward_idle=args.reward_idle)
 render_options = RenderOptions(render=True)
 print_with_color(str(sweeper_config) + "\n", color='blue')
@@ -140,6 +144,7 @@ print_with_color(str(reward_config) + "\n", color='yellow')
 print_with_color(str(render_options) + "\n", color='darkcyan')
 
 env = SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False)
+check_env(env, warn=True)
 
 if args.tensorboard and os.name == 'posix': # Checks if os is Linux
     # Asks if the user wants to delete the tensorboard log
@@ -152,6 +157,86 @@ if args.tensorboard and os.name == 'posix': # Checks if os is Linux
     else:
         print_with_color("Not deleting tensorboard log directory.\n", color='green')
 
+
+class Net(BaseFeaturesExtractor):
+    def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 512):
+        super(Net, self).__init__(observation_space, features_dim)
+        
+        # RADARS
+        # get shape of observation_space["radars"]
+        (n_cell, n_dir, n_r) = observation_space["radars"].shape
+        channel_inter_size = 16
+        dir_inter_size = 8
+        channel_inter_size_2 = 8
+        kernel_size_3 = 3
+        # Step 1: per direction, convolve type of cells and different radius: (n_cell, n_dir, n_r) -> (channel_inter_size, n_dir, 1)
+        self.conv1 = nn.Conv2d(in_channels=n_cell, out_channels=channel_inter_size, kernel_size=(1, n_r), padding=0, bias=True, stride=1)
+        # Step 2: Reshape: (channel_inter_size, n_dir, 1) -> (1, n_dir, channel_inter_size)
+        # Step 3: convolve directions: (1, n_dir, channel_inter_size) -> (channel_inter_size_2, dir_inter_size, 1)
+        stride2 = int(n_dir / dir_inter_size)
+        padding2 = int((n_dir - stride2) / 2)
+        self.conv2 = nn.Conv2d(in_channels=1, out_channels=channel_inter_size_2, kernel_size=(n_dir, channel_inter_size), padding_mode="circular", padding=(padding2,0), bias=True, stride=(stride2, 1))
+        # Step 4: Reshape: (channel_inter_size_2, dir_inter_size, 1) -> (1, dir_inter_size, channel_inter_size_2)
+        # Step 5: convolve directions: (1, dir_inter_size, channel_inter_size_2) -> (1, dir_inter_size, 1)
+        #padding3 = int((kernel_size_3 - 1) / 2)
+        #self.conv3 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(kernel_size_3, channel_inter_size_2), padding_mode="circular", padding=(padding3,0), bias=True, stride=1)
+        # Step 6: Reshape: (1, dir_inter_size, 1) -> (dir_inter_size)
+
+        # OTHER
+        # get shape of observation_space["other"]
+        shape_other = observation_space["other"].shape[0]
+
+        # Concatenate
+        # self.fc1 = nn.Linear(in_features=dir_inter_size + shape_other, out_features=features_dim)
+        self.fc1 = nn.Linear(in_features=dir_inter_size*channel_inter_size_2 + shape_other, out_features=features_dim)
+
+    def forward(self, x):
+        radar = x["radars"]
+        other = x["other"]
+        batch_size = radar.shape[0]
+
+        # RADARS
+        # Step 1: per direction, convolve type of cells and different radius: (n_cell, n_dir, n_r) -> (channel_inter_size, n_dir, 1)
+        # print("1. radar.shape: ", radar.shape)
+        radar = F.relu(self.conv1(radar))
+        # Step 2: Reshape: (channel_inter_size, n_dir, 1) -> (1, n_dir, channel_inter_size)
+        # print("2. radar.shape: ", radar.shape)
+        radar = radar.swapaxes(-1, -3)
+        # print("3. radar.shape: ", radar.shape)
+        # Step 3: convolve directions: (1, n_dir, channel_inter_size) -> (channel_inter_size_2, dir_inter_size, 1)
+        radar = F.relu(self.conv2(radar))
+        # print("4. radar.shape: ", radar.shape)
+        # Step 4: Reshape: (channel_inter_size_2, dir_inter_size, 1) -> (1, dir_inter_size, channel_inter_size_2)
+        radar = radar.swapaxes(-1, -3)
+        # print("5. radar.shape: ", radar.shape)
+        # Step 5: convolve directions: (1, dir_inter_size, channel_inter_size_2) -> (1, dir_inter_size, 1)
+        #radar = F.relu(self.conv3(radar))
+        # print("6. radar.shape: ", radar.shape)
+        # Step 6: Reshape: (1, dir_inter_size, 1) -> (dir_inter_size)
+        radar = radar.reshape(batch_size, -1)
+        # print("7. radar.shape: ", radar.shape)
+
+        # OTHER
+        # print("1. other.shape: ", other.shape)
+        other = other.reshape(batch_size, -1)
+        # print("2. other.shape: ", other.shape)
+
+        # Concatenate
+        c = torch.concat((radar, other), dim=-1)
+        # print("1. c.shape: ", c.shape)
+        c = F.tanh(self.fc1(c))
+        # print("2. c.shape: ", c.shape)
+
+        return c
+
+policy_kwargs = {
+    'activation_fn': nn.Tanh,
+    'net_arch':[128, dict(pi=[128, 64], vf=[128, 64])],
+    "features_extractor_kwargs": dict(features_dim=128),
+    'features_extractor_class':Net,
+}
+
+
 # Create the model
 checkpoint_callback = CheckpointCallback(save_freq=args.save_freq, save_path=args.save_path)
 tensorboard_log = args.tensorboard_log if args.tensorboard else None
@@ -159,7 +244,7 @@ model = model_type(policy=args.policy,
     env=env,
     # learning_rate=args.learning_rate,
     #n_steps=args.n_steps,
-    # batch_size=args.batch_size,
+    batch_size=args.batch_size,
     # n_epochs=args.n_epochs,
     gamma=args.gamma,
     # gae_lambda=args.gae_lambda,
@@ -173,7 +258,7 @@ model = model_type(policy=args.policy,
     # sde_sample_freq=args.sde_sample_freq,
     # target_kl=args.target_kl,
     tensorboard_log=tensorboard_log,
-    # policy_kwargs={"net_arch": [128,256,256,128]},
+    policy_kwargs=policy_kwargs,
     verbose=args.verbose,
     # seed=args.seed,
     # device=args.device,
@@ -191,6 +276,11 @@ if args.tensorboard: # Checks if tensorboard logging is enabled
 print_with_color("\nModel architecture:", color=['bold', 'purple'])
 print_with_color(str(model.policy), color='purple')
 print("")
+
+# Creates a vectorized environment from env with n_envs copies of the environment
+env = DummyVecEnv([lambda: SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False) for _ in range(4)])
+
+
 
 for j in range(args.n_iter_learn):
     # Train the agent

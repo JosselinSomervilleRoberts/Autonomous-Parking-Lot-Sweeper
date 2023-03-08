@@ -11,6 +11,13 @@ import configparser
 screen_config = configparser.ConfigParser()
 screen_config.read('screen_config.ini')
 
+def draw_transparent_circle(screen, radius, color, alpha, center):
+    x, y = center
+    surface = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA) # create a surface with an alpha channel
+    pygame.draw.circle(surface, color, (radius, radius), radius) # draw the circle onto the surface
+    surface.set_alpha(alpha) # set the alpha value of the surface
+    screen.blit(surface, (x - radius, y - radius)) # draw the surface onto the screen at the adjusted position
+
 
 def between(minimum, maximum):
     def func(val):
@@ -121,7 +128,7 @@ class Sweeper:
 
 class Radar:
 
-    def __init__(self, i: int, resolution: int, cell_value: int, radius:int, max_distance: int, n_radars: int):
+    def __init__(self, sweeper_config: SweeperConfig, i: int, resolution: int, cell_value: int, radius:int, max_distance: int, n_radars: int):
         self.i = i
         self.resolution = resolution
         self.radius = radius
@@ -133,46 +140,46 @@ class Radar:
         self.rel_pos = np.array([0., 0.])
         self.angle = - 90 + 360 * i / n_radars
 
-        # # The first 3 radars are on the front of the sweeper pointing forward
-        # # The 4th and 5th are on the front of the sweeper pointing left and right
-        # # The 6th and 7th are on the back of the sweeper pointing left and right
-        # # The 8th, 9th and 10th are on the back of the sweeper pointing backward
-        # # The 11th and 12th are on the left and right side of the sweeper outside
-        # if self.value == Map.CELL_OBSTACLE:
-        #     if i < 3:
-        #         self.angle = 0
-        #         self.rel_pos[0] = sweeper_config.sweeper_size[0] * 0.5
-        #         if i ==1: # Left
-        #             self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
-        #         elif i==2: # Right
-        #             self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
-        #     elif i == 3:
-        #         self.angle = -90
-        #         self.rel_pos[0] = sweeper_config.sweeper_size[0] * 0.5
-        #         self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
-        #     elif i == 4:
-        #         self.angle = 90
-        #         self.rel_pos[0] = sweeper_config.sweeper_size[0] * 0.5
-        #         self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
-        #     elif i == 5:
-        #         self.angle = -90
-        #         self.rel_pos[0] = -sweeper_config.sweeper_size[0] * 0.5
-        #         self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
-        #     elif i == 6:
-        #         self.angle = 90
-        #         self.rel_pos[0] = -sweeper_config.sweeper_size[0] * 0.5
-        #         self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
-        #     elif i < 10:
-        #         self.angle = 180
-        #         self.rel_pos[0] = -sweeper_config.sweeper_size[0] * 0.5
-        #         if i == 8:
-        #             self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
-        #         elif i == 9:
-        #             self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
-        #     else:
-        #         self.angle = - 90 + 360 * i / (sweeper_config.num_radars - 10)
-        # else:
-        #     self.angle = - 90 + 360 * i / sweeper_config.num_radars
+        if i >= n_radars and cell_value == Map.CELL_OBSTACLE:
+            i -= n_radars
+            # The first 3 radars are on the front of the sweeper pointing forward
+            # The 4th and 5th are on the front of the sweeper pointing left and right
+            # The 6th and 7th are on the back of the sweeper pointing left and right
+            # The 8th, 9th and 10th are on the back of the sweeper pointing backward
+            # The 11th and 12th are on the left and right side of the sweeper outside
+            MARGIN = 0.05
+            if i < 3:
+                self.angle = 0
+                self.rel_pos[0] = sweeper_config.sweeper_size[0] * 0.5
+                if i ==1: # Left
+                    self.rel_pos[1] = -sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+                elif i==2: # Right
+                    self.rel_pos[1] = sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+            elif i == 3:
+                self.angle = -90
+                self.rel_pos[0] = sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
+            elif i == 4:
+                self.angle = 90
+                self.rel_pos[0] = sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
+            elif i == 5:
+                self.angle = -90
+                self.rel_pos[0] = -sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
+            elif i == 6:
+                self.angle = 90
+                self.rel_pos[0] = -sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
+            elif i < 10:
+                self.angle = 180
+                self.rel_pos[0] = -sweeper_config.sweeper_size[0] * 0.5
+                if i == 8:
+                    self.rel_pos[1] = -sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+                elif i == 9:
+                    self.rel_pos[1] = sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+            else:
+                raise Exception("Invalid additional obstacle rador of radius 0 index (from 0 to 9 included)")
 
 
     def get_rad_angle(self, sweeper: Sweeper):
@@ -267,12 +274,24 @@ class SweeperEnv(gym.Env):
             )
         elif sweeper_config.observation_type == "simple-double-radar":
             # Gets only speed and radar distances
-            num_radars = np.sum(sweeper_config.num_radars)
+            num_radars = np.sum(sweeper_config.num_radars)# + 10
             self.observation_space = gym.spaces.Box(
                 low=np.array([-1] + [-1] * num_radars),
                 high=np.array([1] + [1] * num_radars),
                 dtype=np.float32
             )
+        elif sweeper_config.observation_type == "simple-radar-cnn":
+            n_cells = len(self.sweeper_config.num_radars)
+            n_r = len(self.sweeper_config.num_radars[0])
+            n_dir = self.sweeper_config.num_radars[0][0]
+            self.observation_space = gym.spaces.Dict({
+                "radars": gym.spaces.Box(
+                    low=-1, high=1, shape=(n_cells, n_dir, n_r), dtype=np.float32
+                ),
+                "other": gym.spaces.Box(
+                    low=-1, high=1, shape=(1,), dtype=np.float32
+                )
+            })
         elif sweeper_config.observation_type == "grid-only":
             # Gets only the grid
             # Reshapes self.map.grid from (width, height) to (width, height, 1)
@@ -323,9 +342,7 @@ class SweeperEnv(gym.Env):
                 self.map.load_random()
         else:
             self.map.clear()
-        print("Starting map:")
-        self.map.compute_matrix_cum(max_radius=7)
-        print("Finished computing number of empty cells in a radius matrix")
+        self.map.compute_matrix_cum(max_radius=5)
 
         # Create sweeper
         self.sweeper = Sweeper(sweeper_config)
@@ -351,6 +368,22 @@ class SweeperEnv(gym.Env):
                 self.sweeper.speed / self.sweeper_config.speed_range[1],
                 *radar_values
             ], dtype=np.float32)
+        elif self.sweeper_config.observation_type == 'simple-radar-cnn':
+            # Returns a dict with a 3D array for the radar distances and a 1D array for the other values
+            n_cells = len(self.radars)
+            n_r = len(self.radars[0])
+            n_dir = len(self.radars[0][0])
+            rad_3D = -np.ones((n_cells, n_dir, n_r), dtype=np.float32)
+            for idx_cell, radars_for_cell in enumerate(self.radars):
+                for idx_r, radars_for_cell_for_r in enumerate(radars_for_cell):
+                    for idx_dir, radar in enumerate(radars_for_cell_for_r):
+                        rad_3D[idx_cell, idx_dir, idx_r] = radar.distance
+            return {
+                "radars": rad_3D,
+                "other": np.array([
+                    self.sweeper.speed / self.sweeper_config.speed_range[1]
+                ], dtype=np.float32)
+            }
         elif self.sweeper_config.observation_type == 'grid-only':
             return self._get_grid_for_observation()
         elif self.sweeper_config.observation_type == 'complex':
@@ -364,7 +397,7 @@ class SweeperEnv(gym.Env):
                 "grid": self._get_grid_for_observation(),
                 "radars": radar_values,
                 "position": self.sweeper.position.copy() / np.array([self.map.width, self.map.height], dtype=np.float32),
-                "speed": np.array(self.sweeper.speed / self.sweeper_config.speed_range[1], dtype=np.float32),
+                "speed": np.array([self.sweeper.speed / self.sweeper_config.speed_range[1]], dtype=np.float32),
                 "direction": np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))], dtype=np.float32)
             }
         else:
@@ -454,7 +487,7 @@ class SweeperEnv(gym.Env):
         self.sweeper_positions.append([self.sweeper.position[0], self.sweeper.position[1]])
         factor = (1. + self.stats.percentage_cleaned / 100.) ** 2
         reward = (3./7) * factor * self.reward_config.reward_area_total * new_area / self.stats.area_empty
-        if abs(acceleration) < 0.05 * self.sweeper_config.acceleration_range[1] and abs(steering) < 0.05 * self.sweeper_config.steering_angle_range[1]:
+        if abs(acceleration) < 0.05 * self.sweeper_config.acceleration_range[1]:
             reward += self.reward_config.reward_idle
         # (3./7) comes fron the integral of (1+x)^2 over [0,1] (factor)
         reward += self.reward_config.reward_per_second * dt + self.reward_config.reward_per_step
@@ -495,7 +528,6 @@ class SweeperEnv(gym.Env):
 
         # Radars
         self.radars = []
-        print(self.sweeper_config.num_radars)
         for cell_value in self.map.i_cum.keys():
             self.radars.append([])
             idx_cell = self.map.i_cum[cell_value]
@@ -503,7 +535,7 @@ class SweeperEnv(gym.Env):
                 count = self.sweeper_config.num_radars[idx_cell][radius]
                 if count == 0: continue
                 max_distance = self.sweeper_config.radar_max_distance[idx_cell][radius]
-                self.radars[-1].append([Radar(i, resolution=self.resolution, cell_value=cell_value, radius=radius, max_distance=max_distance, n_radars=count) for i in range(count)])
+                self.radars[-1].append([Radar(self.sweeper_config, i, resolution=self.resolution, cell_value=cell_value, radius=radius, max_distance=max_distance, n_radars=count) for i in range(count)])# + 10 * (radius==0 and cell_value==Map.CELL_OBSTACLE))])
 
         # Reset sweeper by setting it's position to a random empty cell
         empty_cells = self.map.get_empty_tiles()
@@ -596,6 +628,7 @@ class SweeperEnv(gym.Env):
             pygame.draw.line(self.screen, self.render_options.velocity_color, self.render_options.cell_size * sweeper_pos, self.render_options.cell_size * (sweeper_pos + direction), width=2)
             
         # Dislay radars obstacles
+        alpha_surface = pygame.Surface((self.render_options.width, self.render_options.height), pygame.SRCALPHA)
         displays = [self.render_options.show_radars_empty, self.render_options.show_radars_obstacle, self.render_options.show_radars_cleaned]
         radars_color = [self.render_options.radars_empty_color, self.render_options.radars_obstacle_color, self.render_options.radars_cleaned_color]
         for cell_value in self.map.i_cum.keys():
@@ -615,10 +648,13 @@ class SweeperEnv(gym.Env):
                         rad_angle = radar.get_rad_angle(self.sweeper)
                         direction = self.resolution * distance * np.array([np.cos(rad_angle), np.sin(rad_angle)]) * radar.max_distance
                         position = radar.get_position(self.sweeper)
-                        pygame.draw.line(self.screen, radars_color[idx], self.render_options.cell_size * position, self.render_options.cell_size * (position + direction), width=2) 
-                        pygame.draw.circle(self.screen, radars_color[idx], self.render_options.cell_size * (position + direction), 5)
+                        pygame.draw.line(alpha_surface, radars_color[idx], self.render_options.cell_size * position, self.render_options.cell_size * (position + direction), width=2) 
+                        draw_transparent_circle(self.screen, radius=int(max(0.5,radar.radius) * self.render_options.cell_size), color=radars_color[idx], center=self.render_options.cell_size * (position + direction), alpha=100)
+                        #pygame.draw.circle(alpha_surface, radars_color[idx], self.render_options.cell_size * (position + direction), int(self.render_options.cell_size * max(0.5, radar.radius)))
         
         # Updates the screen
+        alpha_surface.set_alpha(50)
+        self.screen.blit(alpha_surface, (0, 0))
         self.display_footer(clock=clock)
         pygame.display.flip()
 
@@ -845,7 +881,6 @@ if __name__ == "__main__":
         dt = new_time_sec - last_time_sec
         last_time_sec = new_time_sec
         observation, reward, terminated, info = env.step(action, dt=dt)
-        print("Observation: ", observation)
         env.render(clock=clock)
         if terminated:
             observation = env.reset()
