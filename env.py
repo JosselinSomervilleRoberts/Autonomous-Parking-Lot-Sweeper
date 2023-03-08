@@ -475,7 +475,10 @@ class SweeperEnv(gym.Env):
                     fmax = fmid
                 else:
                     fmin = fmid
-            self.sweeper.position = prev_position + fmin * (collision_position - prev_position)
+            STEP_BACK_ON_COLLISION = 0.5
+            norm_dir = np.linalg.norm(collision_position - prev_position)
+            normalized_dir = (collision_position - prev_position) / norm_dir
+            self.sweeper.position = prev_position + (fmin * norm_dir - STEP_BACK_ON_COLLISION) * normalized_dir
             self.sweeper.angle = prev_angle + fmin * (self.sweeper.angle - prev_angle)
             self.sweeper.speed = 0.
             self.sweeper.acceleration = 0.

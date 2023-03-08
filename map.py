@@ -244,12 +244,12 @@ class Map:
         x_min, y_min = np.floor(rectangle.min(axis=0)).astype(int)
         x_max, y_max = np.ceil(rectangle.max(axis=0)).astype(int)
         
-        # Check if the rectangle is completely outside the grid
-        if x_max < 0 or y_max < 0 or x_min >= self.grid.shape[0] or y_min >= self.grid.shape[1]:
-            return False
+        # Check if the rectangle is outside the grid
+        if x_min < 0 or y_min < 0 or x_max >= self.grid.shape[0] or y_max >= self.grid.shape[1]:
+            return True
         
         # Check if the rectangle is completely inside the grid
-        if np.all(self.grid[x_min:x_max+1, y_min:y_max+1] == 0):
+        if np.all(self.grid[x_min:x_max+1, y_min:y_max+1] != Map.CELL_OBSTACLE):
             return False 
         
         # Check if any obstacle cell is inside the rectangle (slow)
@@ -259,7 +259,7 @@ class Map:
             for y in range(max(0,y_min), min(self.height, y_max+1)):
                 if self.grid[x, y] == Map.CELL_OBSTACLE:
                     # Check if the cell is inside the rectangle
-                    if Point(x, y).within(poly_rect):
+                    if Point(x+0.5, y+0.5).within(poly_rect):
                         return True
 
         # No collision found
