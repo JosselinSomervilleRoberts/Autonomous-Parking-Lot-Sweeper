@@ -442,6 +442,88 @@ class Map:
         step = max(0.4, radius)
         return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=step, max_distance=max_distance, set_minus_one_on_out_of_bounds=set_minus_one_on_out_of_bounds, precision=precision, min_distance=min_distance)
 
+
+    def compute_distance_to_closest_zone_of_value_multi_radius_multi_value(self, pos, max_radius: int, rad_angle: float, values: List[int], max_distances: np.array, min_ratio: float = 0.8, precision: float = 0.2, resolution: int = 1) -> np.array:
+        # Compute the direction vector
+        if min_ratio <= 0.5:
+            warn("The min_ratio is too low, it should be at least 0.5 to give good results")
+
+        direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
+
+        step = 0.4
+        max_dist = np.max(max_distances)
+
+        distances = -np.ones((len(values), max_radius + 1), dtype=float) * resolution
+        min_distances = [3.0 if value == Map.CELL_CLEANED else 0.0 for value in values]
+            
+        d = step
+        r_found = - np.ones(len(values), dtype=int)
+        while d < max_dist:
+            cell = pos + d * direction
+            rounded_cell = [int(cell[0]), int(cell[1])]
+
+            # Out of bounds
+            if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
+                # Set obstacles to current distance, let the other at -1
+                for i, value in enumerate(values):
+                    if value == Map.CELL_OBSTACLE:
+                        distances[i, r_found[i] + 1:] = d - step
+                        r_found[i] = max_radius
+                break
+            
+            # Check if there is a circle of radius r_found[i] + 1 of each value i
+            for i, value in enumerate(values):
+                # # If we are already at max distance for the given radius, skip and set -1 (already initialized at -1, so nothing to do)
+                while (r_found[i] < max_radius and max_distances[i, r_found[i] + 1] < d):
+                    r_found[i] += 1
+
+                # If we are at at least the min distance and the ratio is good, then we found a circle
+                found = False
+                while (r_found[i] < max_radius and min_distances[i] <= d \
+                    and self.cum[i, r_found[i] + 1, rounded_cell[0], rounded_cell[1]] / self.nb_element_in_radius[r_found[i] + 1] > min_ratio):
+                        found = True
+                        distances[i, r_found[i] + 1] = d - step
+                        r_found[i] += 1
+
+                        # W need to check again for the max distance
+                        while (r_found[i] < max_radius and max_distances[i, r_found[i] + 1] < d):
+                            r_found[i] += 1
+                
+                # TODO
+                if found:
+                    break
+            
+            # Compute step and increment d
+            min_r_found = np.min(r_found)
+            if min_r_found == max_radius:
+                break
+            step = max(0.5, min_r_found)
+            d += step
+
+        # Refine with binary search
+        for i, value in enumerate(values):
+            for r in range(r_found[i] + 1):
+                initial_step = max(0.5, r)
+                if distances[i, r] > 0: # If we found a circle, then refine
+                    d_min = max(distances[i, r] - initial_step, min_distances[i])
+                    d_max = distances[i, r] + 0.1 * initial_step
+                    while d_max - d_min > precision:
+                        d_mid = (d_min + d_max) / 2
+                        cell = pos + d_mid * direction
+                        rounded_cell = [int(cell[0]), int(cell[1])]
+                        if rounded_cell[0] < 0 or rounded_cell[0] >= self.width or rounded_cell[1] < 0 or rounded_cell[1] >= self.height:
+                            d_max = d_mid
+                        elif self.cum[self.i_cum[value], r, rounded_cell[0], rounded_cell[1]] / self.nb_element_in_radius[r] > min_ratio:
+                            d_max = d_mid
+                        else:
+                            d_min = d_mid
+                    distances[i, r] = d_min
+
+        return distances / resolution
+
+            
+
+
     def compute_distance_to_closest_zone_of_value_slow(self, pos, radius:float, rad_angle: float, value: int, max_distance: float = 1000, min_ratio: float = 0.5) -> float:
         """Returns the distance to the closest obstacle in the given direction
         WARNING: This function is slow, use it only for debugging.

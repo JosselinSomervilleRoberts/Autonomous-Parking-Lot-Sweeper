@@ -16,7 +16,7 @@ class SweeperConfig:
     sweeper_size            : Tuple[float, float] = (2., 1.)    # units
     # num_radars[i,j] is the the number of radars for the i-th cell value with a radius of j
     # Same for radar_max_distance ( empty, wall, cleaned)
-    num_radars              : np.array            = np.array([[32,32,32,32,32,32], [32,32,32,32,32,32], [32,32,32,32,32,32]]) # count
+    num_radars              : np.array            = 4 * np.array([[32,32,32,32,32,32], [32,32,32,32,32,32], [32,32,32,32,32,32]]) # count
     radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [10,15,20,30,40,40], [4,7,10,15,15,15]]) # units
     spawn_min_distance_to_wall : float            = 2.5         # units
 
