@@ -36,6 +36,9 @@ def subtract_array_at(big_array, small_array, x, y, r = None):
     big_array[xmin:xmax, ymin:ymax] -= small_array[x_offset:x_offset + (xmax - xmin), y_offset:y_offset + (ymax - ymin)]
     return big_array
 
+def add_array_at(big_array, small_array, x, y, r = None):
+    return subtract_array_at(big_array, -small_array, x, y, r)
+
 
 
 class Map:
@@ -203,8 +206,7 @@ class Map:
                     self.cleaned_cells_to_display.append((x, y))
                     for r in range(len(self.kernels)):
                         subtract_array_at(self.cum[self.i_cum[Map.CELL_EMPTY],r], self.kernels[r], x=x, y=y, r=r)
-
-
+                        add_array_at(self.cum[self.i_cum[Map.CELL_CLEANED],r], self.kernels[r], x=x, y=y, r=r)
         return count
 
     def fill_polygon(self, polygon: Polygon, value: int, grid: np.ndarray = None):
@@ -428,7 +430,8 @@ class Map:
         def match_fn(x, y):
             return self.cum[self.i_cum[value], radius, x, y] / self.nb_element_in_radius[radius] > min_ratio
         precision = 0.1 * (radius + 1)
-        return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=radius, max_distance=max_distance, set_max_on_out_of_bounds=True, precision=precision)
+        step = max(1, radius)
+        return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=step, max_distance=max_distance, set_max_on_out_of_bounds=True, precision=precision)
 
     def compute_distance_to_closest_zone_of_value_slow(self, pos, radius:float, rad_angle: float, value: int, max_distance: float = 1000, min_ratio: float = 0.5) -> float:
         """Returns the distance to the closest obstacle in the given direction

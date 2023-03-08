@@ -1,5 +1,6 @@
 from typing import Tuple
 from dataclasses import dataclass
+import numpy as np
 
 @dataclass
 class SweeperConfig:
@@ -11,16 +12,18 @@ class SweeperConfig:
     acceleration_range      : Tuple[float, float] = (-30, 30)   # units/s**2
     speed_range             : Tuple[float, float] = (-6, 12)    # units/s
     steering_angle_range    : Tuple[float, float] = (-200, 200) # degrees/s
-    radar_max_distance      : float               = 10          # units
     friction                : float               = 3.0         # 1/s
     sweeper_size            : Tuple[float, float] = (2., 1.)    # units
-    num_radars              : int                 = 32          # number of rays
+    # num_radars[i,j] is the the number of radars for the i-th cell value with a radius of j
+    # Same for radar_max_distance
+    num_radars              : np.array            = np.array([[32,24,16,16,16,16], [16,0,16,0,16,0], [0,0,16,0,16,0]]) # count
+    radar_max_distance      : np.array            = np.array([[4,7,10,15,20,25], [10,12,15,20,20,20], [4,7,10,15,15,15]]) # units
     spawn_min_distance_to_wall : float            = 2.5         # units
 
     def scale(self, resolution):
         self.acceleration_range = (self.acceleration_range[0] * resolution, self.acceleration_range[1] * resolution)
         self.speed_range = (self.speed_range[0] * resolution, self.speed_range[1] * resolution)
-        self.radar_max_distance *= resolution
+        self.radar_max_distance = self.radar_max_distance * resolution
         self.sweeper_size = (self.sweeper_size[0] * resolution, self.sweeper_size[1] * resolution)
 
     def __str__(self):
@@ -138,10 +141,12 @@ class RenderOptions:
     velocity_color  : Tuple[int, int, int] = (0, 0, 255)
 
     # Distance sensor
-    show_radars_obstacle : bool = False
+    show_radars_obstacle : int = -1
     radars_obstacle_color : Tuple[int, int, int] = (255, 0, 255)
-    show_radars_empty : bool = False
+    show_radars_empty : int = -1
     radars_empty_color : Tuple[int, int, int] = (0, 255, 255)
+    show_radars_cleaned : int = -1
+    radars_cleaned_color: Tuple[int, int, int] = (0, 255, 0)
 
     def __str__(self):
         return f"""RenderOptions(
@@ -175,4 +180,6 @@ class RenderOptions:
     radars_obstacle_color   : {self.radars_obstacle_color}
     show_radars_empty       : {self.show_radars_empty}
     radars_empty_color      : {self.radars_empty_color}
+    show_radars_cleaned     : {self.show_radars_cleaned}
+    radars_cleaned_color    : {self.radars_cleaned_color}
 )"""
