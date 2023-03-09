@@ -713,40 +713,6 @@ class SweeperEnv(gym.Env):
         self.map.display(self.sweeper, self.screen, rerender=rerender)
         self.render_options.first_render = False
 
-        # Draw the sweeper's path (with alpha decreasing with time)
-        if self.render_options.show_path:
-            transparency = 1.0
-            for i in range(min(self.render_options.path_num_points, len(self.sweeper_positions)) - 1):
-                pygame.draw.line(self.screen, (self.render_options.path_color[0], self.render_options.path_color[1], self.render_options.path_color[2], int(transparency * 255)),
-                                 self.render_options.cell_size * np.array(self.sweeper_positions[-i-1]),
-                                 self.render_options.cell_size * np.array(self.sweeper_positions[-i-2]),
-                                 width=2)
-                transparency *= self.render_options.path_alpha_decay
-
-        # Draw the sweeper (seeper_pos is the center of the sweeper)
-        sweeper_pos = self.sweeper.position
-        if self.render_options.show_sweeper:
-            sweeper_angle = self.sweeper.angle
-            carImg_temp = pygame.transform.rotate(self.carImg, -sweeper_angle)
-            carImg_rotated_rect = carImg_temp.get_rect()
-            carImg_rotated_rect.center = sweeper_pos * self.render_options.cell_size
-            self.screen.blit(carImg_temp, carImg_rotated_rect)
-
-        # Draw bounding box of sweeper (a np.array of 4 points)
-        if self.render_options.show_bounding_box:
-            sweeper_bbox = self.sweeper.get_bounding_box()
-            pygame.draw.lines(self.screen, self.render_options.bounding_box_color, True, self.render_options.cell_size * sweeper_bbox, width=2)
-
-        # Display a circle around the sweeper's center
-        if self.render_options.show_sweeper_center:
-            pygame.draw.circle(self.screen, self.render_options.sweeper_center_color, self.render_options.cell_size * sweeper_pos, 5)
-            pygame.draw.circle(self.screen, self.render_options.sweeper_center_color, self.render_options.cell_size * self.sweeper.get_front_position(), 3)
-
-        # Display velocity vector as an arrow
-        if self.render_options.show_velocity:
-            direction = 0.2 * self.sweeper.speed * np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))])
-            pygame.draw.line(self.screen, self.render_options.velocity_color, self.render_options.cell_size * sweeper_pos, self.render_options.cell_size * (sweeper_pos + direction), width=2)
-            
         # Dislay radars obstacles
         alpha_surface = pygame.Surface((self.render_options.width, self.render_options.height), pygame.SRCALPHA)
         displays = [self.render_options.show_radars_empty, self.render_options.show_radars_obstacle, self.render_options.show_radars_cleaned]
@@ -794,10 +760,48 @@ class SweeperEnv(gym.Env):
                         #pygame.draw.circle(alpha_surface, radars_color[idx], self.render_options.cell_size * (position + direction), int(self.render_options.cell_size * max(0.5, radar.radius)))
                 
 
-        # Updates the screen
+        # Draw the alpha surface
         alpha_surface.set_alpha(50)
         self.screen.blit(alpha_surface, (0, 0))
+
+        # Draw the sweeper's path (with alpha decreasing with time)
+        if self.render_options.show_path:
+            transparency = 1.0
+            for i in range(min(self.render_options.path_num_points, len(self.sweeper_positions)) - 1):
+                pygame.draw.line(self.screen, (self.render_options.path_color[0], self.render_options.path_color[1], self.render_options.path_color[2], int(transparency * 255)),
+                                 self.render_options.cell_size * np.array(self.sweeper_positions[-i-1]),
+                                 self.render_options.cell_size * np.array(self.sweeper_positions[-i-2]),
+                                 width=2)
+                transparency *= self.render_options.path_alpha_decay
+
+        # Draw the sweeper (seeper_pos is the center of the sweeper)
+        sweeper_pos = self.sweeper.position
+        if self.render_options.show_sweeper:
+            sweeper_angle = self.sweeper.angle
+            carImg_temp = pygame.transform.rotate(self.carImg, -sweeper_angle)
+            carImg_rotated_rect = carImg_temp.get_rect()
+            carImg_rotated_rect.center = sweeper_pos * self.render_options.cell_size
+            self.screen.blit(carImg_temp, carImg_rotated_rect)
+
+        # Draw bounding box of sweeper (a np.array of 4 points)
+        if self.render_options.show_bounding_box:
+            sweeper_bbox = self.sweeper.get_bounding_box()
+            pygame.draw.lines(self.screen, self.render_options.bounding_box_color, True, self.render_options.cell_size * sweeper_bbox, width=2)
+
+        # Display a circle around the sweeper's center
+        if self.render_options.show_sweeper_center:
+            pygame.draw.circle(self.screen, self.render_options.sweeper_center_color, self.render_options.cell_size * sweeper_pos, 5)
+            pygame.draw.circle(self.screen, self.render_options.sweeper_center_color, self.render_options.cell_size * self.sweeper.get_front_position(), 3)
+
+        # Display velocity vector as an arrow
+        if self.render_options.show_velocity:
+            direction = 0.2 * self.sweeper.speed * np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))])
+            pygame.draw.line(self.screen, self.render_options.velocity_color, self.render_options.cell_size * sweeper_pos, self.render_options.cell_size * (sweeper_pos + direction), width=2)
+            
+        # Display footer
         self.display_footer(clock=clock)
+
+        # Update the screen
         pygame.display.flip()
 
     def display_value(self, text, value, x, y, color=(0, 0, 0)):
