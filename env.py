@@ -573,6 +573,9 @@ class SweeperEnv(gym.Env):
             norm_dir = np.linalg.norm(collision_position - prev_position)
             normalized_dir = (collision_position - prev_position) / norm_dir
             self.sweeper.position = prev_position + (fmin * norm_dir - STEP_BACK_ON_COLLISION) * normalized_dir
+            # Check if self.sweeper.position cointains a nan
+            if np.isnan(self.sweeper.position).any():
+                self.sweeper.position = prev_position
             self.sweeper.angle = prev_angle + fmin * (self.sweeper.angle - prev_angle)
             self.sweeper.speed = 0.
             self.sweeper.acceleration = 0.
@@ -650,6 +653,7 @@ class SweeperEnv(gym.Env):
         collision = True
         while collision:
             self.sweeper.position = empty_cells[np.random.randint(len(empty_cells))].astype(np.float32)
+            self.sweeper.angle = np.random.randint(360)
             collision = self.check_collision()
             self.compute_radars()
             # Old radars
@@ -663,9 +667,9 @@ class SweeperEnv(gym.Env):
                 if 0 <= radar.get_distance_to_closest_obstacle() < self.sweeper_config.spawn_min_distance_to_wall:
                     collision = True
                     break
+        self.compute_radars()
 
-            
-        self.sweeper.angle = np.random.randint(360)
+        # Reset sweeper
         self.sweeper.speed = 0
         self.sweeper.acceleration = 0
         self.sweeper.angle_speed = 0
