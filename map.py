@@ -521,7 +521,7 @@ class Map:
                             d_min = d_mid
                     distances[i, r] = d_min
 
-        return distances / resolution
+        return np.minimum(distances, max_distances) / resolution
 
             
 

@@ -166,7 +166,7 @@ class Net(BaseFeaturesExtractor):
         # get shape of observation_space["radars"]
         (n_cell, n_dir, n_r) = observation_space["radars"].shape
         channel_inter_size = 16
-        dir_inter_size = 8
+        dir_inter_size = 16
         channel_inter_size_2 = 8
         kernel_size_3 = 3
         # Step 1: per direction, convolve type of cells and different radius: (n_cell, n_dir, n_r) -> (channel_inter_size, n_dir, 1)

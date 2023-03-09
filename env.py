@@ -7,6 +7,8 @@ from map import Map
 from config import SweeperConfig, RewardConfig, RenderOptions, SweeperStats
 import torch
 import configparser
+from copy import deepcopy
+
 
 screen_config = configparser.ConfigParser()
 screen_config.read('screen_config.ini')
@@ -251,9 +253,7 @@ class AdvancedRadar:
         self._distances = np.array([self._distances[0], self._distances[2], self._distances[1]])
 
         # Normalize the distances
-        idx = np.where(self._distances >= 0)
-        self._norm_distances = self._distances.copy()
-        self._norm_distances[idx] /= self.max_distances[idx]
+        self._norm_distances = np.divide(self._distances, self.max_distances)
         return self._norm_distances
 
     def get_normalized_distances(self) -> np.ndarray:
@@ -351,9 +351,9 @@ class SweeperEnv(gym.Env):
                 dtype=np.float32
             )
         elif sweeper_config.observation_type == "simple-radar-cnn":
-            n_cells = len(self.sweeper_config.radar_max_distance)
-            n_r = len(self.sweeper_config.radar_max_distance[0])
-            n_dir = self.sweeper_config.radar_max_distance[0][0]
+            n_cells = 3
+            n_r = self.sweeper_config.radar_max_radius + 1
+            n_dir = self.sweeper_config.num_radars
             self.observation_space = gym.spaces.Dict({
                 "radars": gym.spaces.Box(
                     low=-1, high=1, shape=(n_cells, n_dir, n_r), dtype=np.float32
@@ -371,9 +371,9 @@ class SweeperEnv(gym.Env):
         elif sweeper_config.observation_type == "complex":
             # Gets the grid, the radar distances, the normalized position, the speed and the direction
             # Reshapes self.map.grid from (width, height) to (width, height, 1)
-            n_cells = len(self.sweeper_config.radar_max_distance)
-            n_r = len(self.sweeper_config.radar_max_distance[0])
-            n_dir = self.sweeper_config.radar_max_distance[0][0]
+            n_cells = 3
+            n_r = self.sweeper_config.radar_max_radius + 1
+            n_dir = self.sweeper_config.num_radars
             num_radars = n_cells * n_dir * n_r
             self.observation_space = gym.spaces.Dict({
                 "grid": gym.spaces.Box(
@@ -468,7 +468,12 @@ class SweeperEnv(gym.Env):
 
             # Advanced radars
             rad_3D = np.array([radar.get_normalized_distances() for radar in self.radars], dtype=np.float32) # shape (n_dir, n_cells, n_r)
-            rad_3D.swapaxes(0, 1) # shape (n_cells, n_dir, n_r)
+            rad_3D = rad_3D.swapaxes(0, 1) # shape (n_cells, n_dir, n_r)
+
+            return {
+                "radars": rad_3D,
+                "other": np.array([self.sweeper.speed / self.sweeper_config.speed_range[1]], dtype=np.float32)
+            }
 
         elif self.sweeper_config.observation_type == 'grid-only':
             return self._get_grid_for_observation()
@@ -750,7 +755,7 @@ class SweeperEnv(gym.Env):
                 elif cell_value == Map.CELL_EMPTY:
                     self.display_value("Empty radius: ", r, int(self.render_options.width * 0.74), -30, color=radars_color[idx])
                 for radar in self.radars:
-                    distance = radar.get_distances()[idx][r]
+                    distance = radar.get_normalized_distances()[idx][r] * radar.max_distances[idx][r]
                     if distance >= 0:
                         rad_angle = radar.get_rad_angle(self.sweeper)
                         direction = self.resolution * distance * np.array([np.cos(rad_angle), np.sin(rad_angle)])

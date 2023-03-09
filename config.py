@@ -26,7 +26,7 @@ class SweeperConfig:
     # Cell-value order: ( empty, cleaned, obstacle)
     radar_max_radius        : int                 = 5           # units
     num_radars              : int                 = 32 # count
-    radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [4,7,10,15,15,15], [10,15,20,30,40,40]]) # units
+    radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [6,8,10,15,15,15], [10,15,20,30,40,40]]) # units
 
     spawn_min_distance_to_wall : float            = 2.5         # units
 
