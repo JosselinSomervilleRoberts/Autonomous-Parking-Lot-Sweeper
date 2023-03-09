@@ -443,14 +443,14 @@ class Map:
         return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=step, max_distance=max_distance, set_minus_one_on_out_of_bounds=set_minus_one_on_out_of_bounds, precision=precision, min_distance=min_distance)
 
 
-    def compute_distance_to_closest_zone_of_value_multi_radius_multi_value(self, pos, max_radius: int, rad_angle: float, values: List[int], max_distances: np.array, min_ratio: float = 0.8, precision: float = 0.2, resolution: int = 1) -> np.array:
+    def compute_distance_to_closest_zone_of_value_multi_radius_multi_value(self, pos, max_radius: int, rad_angle: float, values: List[int], max_distances: np.array, min_ratio: float = 0.8, precision: float = 0.1, resolution: int = 1) -> np.array:
         # Compute the direction vector
         if min_ratio <= 0.5:
             warn("The min_ratio is too low, it should be at least 0.5 to give good results")
 
         direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
 
-        step = 0.4
+        step = 0.5
         max_dist = np.max(max_distances)
 
         distances = -np.ones((len(values), max_radius + 1), dtype=float) * resolution
@@ -480,7 +480,7 @@ class Map:
                 # If we are at at least the min distance and the ratio is good, then we found a circle
                 found = False
                 while (r_found[i] < max_radius and min_distances[i] <= d \
-                    and self.cum[i, r_found[i] + 1, rounded_cell[0], rounded_cell[1]] / self.nb_element_in_radius[r_found[i] + 1] > min_ratio):
+                    and self.cum[self.i_cum[value], r_found[i] + 1, rounded_cell[0], rounded_cell[1]] / self.nb_element_in_radius[r_found[i] + 1] > min_ratio):
                         found = True
                         distances[i, r_found[i] + 1] = d - step
                         r_found[i] += 1
@@ -489,12 +489,14 @@ class Map:
                         while (r_found[i] < max_radius and max_distances[i, r_found[i] + 1] < d):
                             r_found[i] += 1
                 
-                # TODO
+                # With a min_ratio of at least 0.5, if we found a circle of a given value with a ratio r,
+                # Then all other circles of other values will have at most a ratio of 1 - r < 0.5 <= min_ratio.
+                # So we can stop the search for the other values
                 if found:
                     break
             
             # Compute step and increment d
-            min_r_found = np.min(r_found)
+            min_r_found = r_found[2] # Istead of taking the min, we take r_found[OBSTACLE] as it is the only one that requires a really good precision np.min(r_found)
             if min_r_found == max_radius:
                 break
             step = max(0.5, min_r_found)

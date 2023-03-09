@@ -14,10 +14,20 @@ class SweeperConfig:
     steering_angle_range    : Tuple[float, float] = (-200, 200) # degrees/s
     friction                : float               = 3.0         # 1/s
     sweeper_size            : Tuple[float, float] = (2., 1.)    # units
-    # num_radars[i,j] is the the number of radars for the i-th cell value with a radius of j
-    # Same for radar_max_distance ( empty, wall, cleaned)
-    num_radars              : np.array            = 4 * np.array([[32,32,32,32,32,32], [32,32,32,32,32,32], [32,32,32,32,32,32]]) # count
-    radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [10,15,20,30,40,40], [4,7,10,15,15,15]]) # units
+    
+    # Old radars
+    # # num_radars[i,j] is the the number of radars for the i-th cell value with a radius of j
+    # # Same for radar_max_distance ( empty, obstacle, cleaned)
+    # num_radars              : np.array            = 2 * np.array([[32,32,32,32,32,32], [32,32,32,32,32,32], [32,32,32,32,32,32]]) # count
+    # radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [10,15,20,30,40,40], [4,7,10,15,15,15]]) # units
+
+    # Advanced radars
+    # radar_max_distance[i,j] is the the max distance for the i-th cell value with a radius of j
+    # Cell-value order: ( empty, cleaned, obstacle)
+    radar_max_radius        : int                 = 5           # units
+    num_radars              : int                 = 32 # count
+    radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [4,7,10,15,15,15], [10,15,20,30,40,40]]) # units
+
     spawn_min_distance_to_wall : float            = 2.5         # units
 
     def scale(self, resolution):
@@ -38,6 +48,7 @@ class SweeperConfig:
     radar_max_distance         : {self.radar_max_distance}
     friction                   : {self.friction}
     sweeper_size               : {self.sweeper_size}
+    radar_max_radius           : {self.radar_max_radius}
     num_radars                 : {self.num_radars}
     spawn_min_distance_to_wall : {self.spawn_min_distance_to_wall}
 )"""

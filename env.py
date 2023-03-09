@@ -242,8 +242,14 @@ class AdvancedRadar:
         position = self.get_position(sweeper)
 
         # Compute the distance
-        self._distances = map.compute_distance_to_closest_zone_of_value_multi_radius_multi_value(pos=position, rad_angle=rad_angle, values=[Map.CELL_EMPTY, Map.CELL_OBSTACLE, Map.CELL_CLEANED], max_radius=self.max_radius, max_distances=self.max_distances, resolution=self.resolution)
+        # We compute in the order (empty, cleaned, obstacle) as it is
+        # more efficient in ters of skipping (see compute_distance_to_closest_zone_of_value_multi_radius_multi_value,
+        # the use of the min_ratio >= 0.5 trick).
+        self._distances = map.compute_distance_to_closest_zone_of_value_multi_radius_multi_value(pos=position, rad_angle=rad_angle, values=[Map.CELL_EMPTY, Map.CELL_CLEANED, Map.CELL_OBSTACLE], max_radius=self.max_radius, max_distances=self.max_distances, resolution=self.resolution)
         
+        # Reorder the results
+        self._distances = np.array([self._distances[0], self._distances[2], self._distances[1]])
+
         # Normalize the distances
         idx = np.where(self._distances >= 0)
         self._norm_distances = self._distances.copy()
@@ -257,10 +263,10 @@ class AdvancedRadar:
         return self._distances
 
     def get_distances_obstacles(self) -> np.ndarray:
-        return self._distances[1]
+        return self._distances[2]
 
     def get_distances_cleaned(self) -> np.ndarray:
-        return self._distances[2]
+        return self._distances[1]
 
     def get_distances_empty(self) -> np.ndarray:
         return self._distances[0]
@@ -332,22 +338,22 @@ class SweeperEnv(gym.Env):
         if sweeper_config.observation_type == "simple":
             # Gets only speed and radar distances
             self.observation_space = gym.spaces.Box(
-                low=np.array([-1] + [-1] * (sweeper_config.num_radars[self.map.i_cum[Map.CELL_OBSTACLE]][0])),
-                high=np.array([1] + [1] * (sweeper_config.num_radars[self.map.i_cum[Map.CELL_OBSTACLE]][0])),
+                low=np.array([-1] + [-1] * (sweeper_config.num_radars)),
+                high=np.array([1] + [1] * (sweeper_config.num_radars)),
                 dtype=np.float32
             )
         elif sweeper_config.observation_type == "simple-double-radar":
             # Gets only speed and radar distances
-            num_radars = np.sum(sweeper_config.num_radars)# + 10
+            num_radars = 2 * sweeper_config.num_radars# + 10
             self.observation_space = gym.spaces.Box(
                 low=np.array([-1] + [-1] * num_radars),
                 high=np.array([1] + [1] * num_radars),
                 dtype=np.float32
             )
         elif sweeper_config.observation_type == "simple-radar-cnn":
-            n_cells = len(self.sweeper_config.num_radars)
-            n_r = len(self.sweeper_config.num_radars[0])
-            n_dir = self.sweeper_config.num_radars[0][0]
+            n_cells = len(self.sweeper_config.radar_max_distance)
+            n_r = len(self.sweeper_config.radar_max_distance[0])
+            n_dir = self.sweeper_config.radar_max_distance[0][0]
             self.observation_space = gym.spaces.Dict({
                 "radars": gym.spaces.Box(
                     low=-1, high=1, shape=(n_cells, n_dir, n_r), dtype=np.float32
@@ -365,7 +371,10 @@ class SweeperEnv(gym.Env):
         elif sweeper_config.observation_type == "complex":
             # Gets the grid, the radar distances, the normalized position, the speed and the direction
             # Reshapes self.map.grid from (width, height) to (width, height, 1)
-            num_radars = np.sum(sweeper_config.num_radars)
+            n_cells = len(self.sweeper_config.radar_max_distance)
+            n_r = len(self.sweeper_config.radar_max_distance[0])
+            n_dir = self.sweeper_config.radar_max_distance[0][0]
+            num_radars = n_cells * n_dir * n_r
             self.observation_space = gym.spaces.Dict({
                 "grid": gym.spaces.Box(
                     low=0, high=255, shape=(self.map.width, self.map.height, 1), dtype=Map.CELL_TYPE
@@ -406,7 +415,7 @@ class SweeperEnv(gym.Env):
                 self.map.load_random()
         else:
             self.map.clear()
-        self.map.compute_matrix_cum(max_radius=5)
+        self.map.compute_matrix_cum(max_radius=sweeper_config.radar_max_radius)
 
         # Create sweeper
         self.sweeper = Sweeper(sweeper_config)
@@ -585,7 +594,8 @@ class SweeperEnv(gym.Env):
             reward += self.reward_config.reward_backwards
 
         # Radars
-        self.compute_radars()
+        if np.linalg.norm(prev_position - self.sweeper.position) > 0.1 or abs(prev_angle - self.sweeper.angle) > 3:
+            self.compute_radars()
 
         # Update stats
         self.stats.update(new_area=new_area, new_reward=reward, had_collision=had_collision, dt=dt)
@@ -631,8 +641,9 @@ class SweeperEnv(gym.Env):
         #         self.radars[-1].append([Radar(self.sweeper_config, i, resolution=self.resolution, cell_value=cell_value, radius=radius, max_distance=max_distance, n_radars=count) for i in range(count)])# + 10 * (radius==0 and cell_value==Map.CELL_OBSTACLE))])
 
         # Advanced radars
-        n_radars = 128
-        self.radars = [AdvancedRadar(i=i, sweeper_config=self.sweeper_config, resolution=self.resolution, max_radius=5, n_radars=n_radars) for i in range(n_radars)]
+        n_radars = self.sweeper_config.num_radars
+        max_radius = self.sweeper_config.radar_max_radius
+        self.radars = [AdvancedRadar(i=i, sweeper_config=self.sweeper_config, resolution=self.resolution, max_radius=max_radius, n_radars=n_radars) for i in range(n_radars)]
         
         # Reset sweeper by setting it's position to a random empty cell
         empty_cells = self.map.get_empty_tiles()
@@ -907,17 +918,17 @@ class SweeperEnv(gym.Env):
                 self.debug = not self.debug
             if event.key == pygame.K_w:
                 self.render_options.show_radars_obstacle += 1
-                if self.render_options.show_radars_obstacle >= 6:# len(self.radars[self.map.i_cum[Map.CELL_OBSTACLE]]):
+                if self.render_options.show_radars_obstacle > self.sweeper_config.radar_max_radius:
                     self.render_options.show_radars_obstacle = -1
                 self.render_options.first_render = True
             if event.key == pygame.K_e:
                 self.render_options.show_radars_empty += 1
-                if self.render_options.show_radars_empty >= 6:# len(self.radars[self.map.i_cum[Map.CELL_EMPTY]]):
+                if self.render_options.show_radars_empty > self.sweeper_config.radar_max_radius:
                     self.render_options.show_radars_empty = -1
                 self.render_options.first_render = True
             if event.key == pygame.K_c:
                 self.render_options.show_radars_cleaned += 1
-                if self.render_options.show_radars_cleaned >= 6:# len(self.radars[self.map.i_cum[Map.CELL_CLEANED]]):
+                if self.render_options.show_radars_cleaned > self.sweeper_config.radar_max_radius:
                     self.render_options.show_radars_cleaned = -1
                 self.render_options.first_render = True
             if event.key == pygame.K_n:
