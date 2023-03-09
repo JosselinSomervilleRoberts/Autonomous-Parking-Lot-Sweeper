@@ -282,6 +282,10 @@ class AdvancedRadar:
     def get_distance_to_closest_obstacle(self) -> float:
         return self._distances[1][0]
 
+    def get_complex_obs(self) -> np.ndarray:
+        obs = self.get_observed_distances()
+        return [obs[1][0], obs[0][0], obs[0][4]]
+
     
 class SweeperEnv(gym.Env):
 
@@ -374,18 +378,15 @@ class SweeperEnv(gym.Env):
             # Gets only the grid
             # Reshapes self.map.grid from (width, height) to (width, height, 1)
             self.observation_space = gym.spaces.Box(
-                low=0, high=255, shape=(self.map.width, self.map.height, 1), dtype=Map.CELL_TYPE
+                low=0, high=255, shape=(self.map.width, self.map.height, 2), dtype=Map.CELL_TYPE
             )
         elif sweeper_config.observation_type == "complex":
             # Gets the grid, the radar distances, the normalized position, the speed and the direction
             # Reshapes self.map.grid from (width, height) to (width, height, 1)
-            n_cells = 3
-            n_r = self.sweeper_config.radar_max_radius + 1
-            n_dir = self.sweeper_config.num_radars
-            num_radars = n_cells * n_dir * n_r
+            num_radars = sweeper_config.num_radars * 3
             self.observation_space = gym.spaces.Dict({
                 "grid": gym.spaces.Box(
-                    low=0, high=255, shape=(self.map.width, self.map.height, 1), dtype=Map.CELL_TYPE
+                    low=0, high=255, shape=(self.map.width, self.map.height, 2), dtype=Map.CELL_TYPE
                 ),
                 "radars": gym.spaces.Box(
                     low=-1, high=1, shape=(num_radars,), dtype=np.float32
@@ -394,7 +395,7 @@ class SweeperEnv(gym.Env):
                     low=0, high=1, shape=(2,), dtype=np.float32
                 ),
                 "speed": gym.spaces.Box(
-                    low=-1, high=1, shape=(1,), dtype=np.float32
+                    low=-1, high=1, shape=(3,), dtype=np.float32
                 ),
                 "direction": gym.spaces.Box(
                     low=-1, high=1, shape=(2,), dtype=np.float32
@@ -495,17 +496,24 @@ class SweeperEnv(gym.Env):
             # radar_values = np.array(radar_values, dtype=np.float32)
 
             # Advanced radars
+            # radar_values = []
+            # for radar in self.radars:
+            #     radar_values += radar.get_normalized_distances().copy().flatten().tolist()
+            # radar_values = np.array(radar_values, dtype=np.float32)
             radar_values = []
             for radar in self.radars:
-                radar_values += radar.get_normalized_distances().copy().flatten().tolist()
+                radar_values += radar.get_complex_obs()
             radar_values = np.array(radar_values, dtype=np.float32)
+            norm_speed = self.sweeper.speed / self.sweeper_config.speed_range[1]
+            dir = np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))], dtype=np.float32)
+            speed = np.array([norm_speed, dir[0] * norm_speed, dir[1] * norm_speed], dtype=np.float32)
 
             return {
                 "grid": self._get_grid_for_observation(),
                 "radars": radar_values,
                 "position": self.sweeper.position.copy() / np.array([self.map.width, self.map.height], dtype=np.float32),
-                "speed": np.array([self.sweeper.speed / self.sweeper_config.speed_range[1]], dtype=np.float32),
-                "direction": np.array([np.cos(np.deg2rad(self.sweeper.angle)), np.sin(np.deg2rad(self.sweeper.angle))], dtype=np.float32)
+                "speed": speed,
+                "direction": dir
             }
         else:
             raise Exception("Unknown observation type: " + self.sweeper_config.observation_type)

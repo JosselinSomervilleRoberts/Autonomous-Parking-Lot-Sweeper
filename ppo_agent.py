@@ -158,9 +158,9 @@ if args.tensorboard and os.name == 'posix': # Checks if os is Linux
         print_with_color("Not deleting tensorboard log directory.\n", color='green')
 
 
-class Net(BaseFeaturesExtractor):
+class RadarCnnNet(BaseFeaturesExtractor):
     def __init__(self, observation_space: gym.spaces.Dict, features_dim: int = 512):
-        super(Net, self).__init__(observation_space, features_dim)
+        super(RadarCnnNet, self).__init__(observation_space, features_dim)
         
         # RADARS
         # get shape of observation_space["radars"]
@@ -272,7 +272,7 @@ policy_kwargs = {
     'activation_fn': nn.Tanh,
     'net_arch':[64, dict(pi=[64, 32], vf=[64, 32])],
     "features_extractor_kwargs": dict(features_dim=128),
-    'features_extractor_class':Net,
+    'features_extractor_class':RadarCnnNet,
 }
 
 
@@ -297,7 +297,7 @@ model = model_type(policy=args.policy,
     # sde_sample_freq=args.sde_sample_freq,
     # target_kl=args.target_kl,
     tensorboard_log=tensorboard_log,
-    policy_kwargs=policy_kwargs,
+    #policy_kwargs=policy_kwargs,
     verbose=args.verbose,
     # seed=args.seed,
     # device=args.device,

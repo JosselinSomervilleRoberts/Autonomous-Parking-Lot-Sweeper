@@ -27,6 +27,14 @@ from scipy import signal
 from config import RenderOptions
 from user_utils import warn
 
+from scipy import ndimage
+def rotateImage(img, angle, pivot, pad_value=0):
+    padX = [img.shape[1] - pivot[0], pivot[0]]
+    padY = [img.shape[0] - pivot[1], pivot[1]]
+    imgP = np.pad(img, [padY, padX, [0,0]], 'constant', constant_values=pad_value)
+    imgR = ndimage.rotate(imgP, angle, reshape=False)
+    return imgR[padY[0] : -padY[1], padX[0] : -padX[1]]
+
 
 def subtract_array_at(big_array, small_array, x, y, r = None):
     if r is None: r = (small_array.shape[0] - 1) // 2
@@ -209,6 +217,7 @@ class Map:
                 if self.grid[x, y] == Map.CELL_EMPTY and polygon.contains(Point(x, y)):
                     self.grid[x, y] = value
                     self.cleaned_cells_to_display.append((x, y))
+                    self.masks[x, y, 1] = 0
                     for r in range(len(self.kernels)):
                         subtract_array_at(self.cum[self.i_cum[Map.CELL_EMPTY],r], self.kernels[r], x=x, y=y, r=r)
                         add_array_at(self.cum[self.i_cum[Map.CELL_CLEANED],r], self.kernels[r], x=x, y=y, r=r)
@@ -234,10 +243,13 @@ class Map:
         self.fill_polygon(polygon, value, grid=grid)
 
     def get_reshaped_grid_with_sweeper(self, sweeper) -> np.ndarray:
-        g = self.grid.reshape(self.width, self.height, 1)
-        self.fill_rectangle(sweeper.get_lower_bounding_box(), Map.CELL_BACK_SWEEPER, grid=g)
-        self.fill_rectangle(sweeper.get_upper_bounding_box(), Map.CELL_FRONT_SWEEPER, grid=g)
-        return g
+        pos = sweeper.position.copy()
+        rounded_pos = np.round(pos).astype(int)
+        rad_angle = np.deg2rad(sweeper.angle)
+
+        # Rotates self.masks aroung rounded_pos by rad_angle, pads it with zeros and returns it
+        g = rotateImage(self.masks, rad_angle, pivot=rounded_pos)
+        return 0 * g.astype(Map.CELL_TYPE)
 
     def check_collision(self, rectangle: np.ndarray) -> bool:
         # Convert the coordinates to integers
@@ -290,6 +302,9 @@ class Map:
 
     def load(self, filename: str):
         self.grid = np.load(filename).astype(Map.CELL_TYPE)
+        self.masks = np.zeros((self.width, self.height, 2), dtype=np.float32)
+        self.masks[:,:,0] = 1 - self.grid == Map.CELL_OBSTACLE
+        self.masks[:,:,1] = self.grid == Map.CELL_EMPTY
         self.clear()
 
     def load_random(self):
