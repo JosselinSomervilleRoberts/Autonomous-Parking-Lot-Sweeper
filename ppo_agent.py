@@ -278,7 +278,7 @@ print_with_color(str(model.policy), color='purple')
 print("")
 
 # Creates a vectorized environment from env with n_envs copies of the environment
-env = DummyVecEnv([lambda: SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False) for _ in range(4)])
+# env = DummyVecEnv([lambda: SweeperEnv(sweeper_config=sweeper_config, reward_config=reward_config, render_options=render_options, resolution = 2.0, debug=False) for _ in range(4)])
 
 
 
