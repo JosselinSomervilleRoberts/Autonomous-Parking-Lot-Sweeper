@@ -24,9 +24,11 @@ class SweeperConfig:
     # Advanced radars
     # radar_max_distance[i,j] is the the max distance for the i-th cell value with a radius of j
     # Cell-value order: ( empty, cleaned, obstacle)
-    radar_max_radius        : int                 = 4           # units
-    num_radars              : int                 = 32 # count
-    radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [6,8,10,15,15,15], [10,15,20,30,40,40]]) # units
+    radar_max_radius        : int                 = 0           # units
+    num_radars              : int                 = 16 # count
+    #radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35,50], [6,8,10,15,15,15], [10,15,20,30,40,40]]) # units
+    #radar_max_distance      : np.array            = 2 * np.array([[8,11,15,25,35], [6,8,10,15,15], [10,15,20,30,40]]) # units
+    radar_max_distance      : np.array            = 2 * np.array([[8], [6], [10]]) # units
 
     spawn_min_distance_to_wall : float            = 2.5         # units
 

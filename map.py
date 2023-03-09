@@ -249,7 +249,7 @@ class Map:
 
         # Rotates self.masks aroung rounded_pos by rad_angle, pads it with zeros and returns it
         g = rotateImage(self.masks, rad_angle, pivot=rounded_pos)
-        return 0 * g.astype(Map.CELL_TYPE)
+        return 255 * g.astype(Map.CELL_TYPE)
 
     def check_collision(self, rectangle: np.ndarray) -> bool:
         # Convert the coordinates to integers

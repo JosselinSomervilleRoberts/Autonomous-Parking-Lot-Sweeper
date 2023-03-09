@@ -226,6 +226,47 @@ class AdvancedRadar:
         self._distances = - np.ones((3, max_radius + 1), dtype=np.float32)
         self._norm_distances = - np.ones((3, max_radius + 1), dtype=np.float32)
 
+        if i >= n_radars:
+            i -= n_radars
+            # The first 3 radars are on the front of the sweeper pointing forward
+            # The 4th and 5th are on the front of the sweeper pointing left and right
+            # The 6th and 7th are on the back of the sweeper pointing left and right
+            # The 8th, 9th and 10th are on the back of the sweeper pointing backward
+            # The 11th and 12th are on the left and right side of the sweeper outside
+            MARGIN = 0.05
+            if i < 3:
+                self.angle = 0
+                self.rel_pos[0] = sweeper_config.sweeper_size[0] * 0.5
+                if i ==1: # Left
+                    self.rel_pos[1] = -sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+                elif i==2: # Right
+                    self.rel_pos[1] = sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+            elif i == 3:
+                self.angle = -90
+                self.rel_pos[0] = sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
+            elif i == 4:
+                self.angle = 90
+                self.rel_pos[0] = sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
+            elif i == 5:
+                self.angle = -90
+                self.rel_pos[0] = -sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = -sweeper_config.sweeper_size[1] * 0.5
+            elif i == 6:
+                self.angle = 90
+                self.rel_pos[0] = -sweeper_config.sweeper_size[0] * (0.5 + MARGIN)
+                self.rel_pos[1] = sweeper_config.sweeper_size[1] * 0.5
+            elif i < 10:
+                self.angle = 180
+                self.rel_pos[0] = -sweeper_config.sweeper_size[0] * 0.5
+                if i == 8:
+                    self.rel_pos[1] = -sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+                elif i == 9:
+                    self.rel_pos[1] = sweeper_config.sweeper_size[1] * (0.5 + MARGIN)
+            else:
+                raise Exception("Invalid additional obstacle rador of radius 0 index (from 0 to 9 included)")
+
 
     def get_rad_angle(self, sweeper: Sweeper):
         return (sweeper.angle + self.angle) * np.pi / 180.
@@ -263,8 +304,8 @@ class AdvancedRadar:
 
     def get_observed_distances(self) -> np.ndarray:
         obs = self._norm_distances.copy()
-        obs[obs >= 0] *= self.NORM_DIST_FACT
-        obs[obs < 0] = 1.0
+        # obs[obs >= 0] *= self.NORM_DIST_FACT
+        # obs[obs < 0] = 1.0
         return obs
 
     def get_distances(self) -> np.ndarray:
@@ -284,7 +325,7 @@ class AdvancedRadar:
 
     def get_complex_obs(self) -> np.ndarray:
         obs = self.get_observed_distances()
-        return [obs[1][0], obs[0][0], obs[0][4]]
+        return [obs[2][0], obs[0][0]]
 
     
 class SweeperEnv(gym.Env):
@@ -350,13 +391,13 @@ class SweeperEnv(gym.Env):
         if sweeper_config.observation_type == "simple":
             # Gets only speed and radar distances
             self.observation_space = gym.spaces.Box(
-                low=np.array([-1] + [-1] * (sweeper_config.num_radars)),
+                low=np.array([-1] + [0] * (sweeper_config.num_radars)),
                 high=np.array([1] + [1] * (sweeper_config.num_radars)),
                 dtype=np.float32
             )
         elif sweeper_config.observation_type == "simple-double-radar":
             # Gets only speed and radar distances
-            num_radars = 2 * sweeper_config.num_radars# + 10
+            num_radars = 2 * sweeper_config.num_radars + 20
             self.observation_space = gym.spaces.Box(
                 low=np.array([-1] + [-1] * num_radars),
                 high=np.array([1] + [1] * num_radars),
@@ -368,7 +409,7 @@ class SweeperEnv(gym.Env):
             n_dir = self.sweeper_config.num_radars
             self.observation_space = gym.spaces.Dict({
                 "radars": gym.spaces.Box(
-                    low=-1, high=1, shape=(n_cells, n_dir, n_r), dtype=np.float32
+                    low=0, high=1, shape=(n_cells, n_dir, n_r), dtype=np.float32
                 ),
                 "other": gym.spaces.Box(
                     low=-1, high=1, shape=(1,), dtype=np.float32
@@ -383,13 +424,13 @@ class SweeperEnv(gym.Env):
         elif sweeper_config.observation_type == "complex":
             # Gets the grid, the radar distances, the normalized position, the speed and the direction
             # Reshapes self.map.grid from (width, height) to (width, height, 1)
-            num_radars = sweeper_config.num_radars * 3
+            num_radars = sweeper_config.num_radars * 2
             self.observation_space = gym.spaces.Dict({
                 "grid": gym.spaces.Box(
                     low=0, high=255, shape=(self.map.width, self.map.height, 2), dtype=Map.CELL_TYPE
                 ),
                 "radars": gym.spaces.Box(
-                    low=-1, high=1, shape=(num_radars,), dtype=np.float32
+                    low=0, high=1, shape=(num_radars,), dtype=np.float32
                 ),
                 "position": gym.spaces.Box(
                     low=0, high=1, shape=(2,), dtype=np.float32
@@ -456,7 +497,7 @@ class SweeperEnv(gym.Env):
             # Advanced radars
             radar_values = []
             for radar in self.radars:
-                radar_values += radar.get_normalized_distances().copy().flatten().tolist()
+                radar_values += radar.get_complex_obs()
             radar_values = np.array(radar_values, dtype=np.float32)
 
             return np.array([
@@ -670,7 +711,7 @@ class SweeperEnv(gym.Env):
         # Advanced radars
         n_radars = self.sweeper_config.num_radars
         max_radius = self.sweeper_config.radar_max_radius
-        self.radars = [AdvancedRadar(i=i, sweeper_config=self.sweeper_config, resolution=self.resolution, max_radius=max_radius, n_radars=n_radars) for i in range(n_radars)]
+        self.radars = [AdvancedRadar(i=i, sweeper_config=self.sweeper_config, resolution=self.resolution, max_radius=max_radius, n_radars=n_radars) for i in range(n_radars+10)]
         
         # Reset sweeper by setting it's position to a random empty cell
         empty_cells = self.map.get_empty_tiles()
