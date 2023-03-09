@@ -11,7 +11,7 @@ class SweeperConfig:
     acceleration_range      : Tuple[float, float] = (-30, 30)   # units/s**2
     speed_range             : Tuple[float, float] = (-6, 12)    # units/s
     steering_angle_range    : Tuple[float, float] = (-200, 200) # degrees/s
-    radar_max_distance      : float               = 10          # units
+    radar_max_distance      : float               = 20          # units
     friction                : float               = 3.0         # 1/s
     sweeper_size            : Tuple[float, float] = (2., 1.)    # units
     num_radars              : int                 = 32          # number of rays

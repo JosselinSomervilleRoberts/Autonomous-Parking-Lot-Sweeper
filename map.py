@@ -428,7 +428,8 @@ class Map:
         def match_fn(x, y):
             return self.cum[self.i_cum[value], radius, x, y] / self.nb_element_in_radius[radius] > min_ratio
         precision = 0.1 * (radius + 1)
-        return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=radius, max_distance=max_distance, set_max_on_out_of_bounds=True, precision=precision)
+        step = max(0.5, radius)
+        return self.compute_distance_to_closest_match(pos, rad_angle, match_fn, step=step, max_distance=max_distance, set_max_on_out_of_bounds=True, precision=precision)
 
     def compute_distance_to_closest_zone_of_value_slow(self, pos, radius:float, rad_angle: float, value: int, max_distance: float = 1000, min_ratio: float = 0.5) -> float:
         """Returns the distance to the closest obstacle in the given direction
@@ -474,12 +475,12 @@ class Map:
     def compute_distance_to_closest_cell_of_value(self, pos, rad_angle, value, max_distance=1000):
         """Returns the distance to the closest obstacle in the given direction"""
         # Compute the direction vector
-        warn("This function is deprecated, use compute_distance_to_closest_zone_of_value with a radius of 0 instead")
+        # warn("This function is deprecated, use compute_distance_to_closest_zone_of_value with a radius of 0 instead")
         direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
 
         # Compute the distance to the closest obstacle using a step by step approach
         d = max_distance
-        for distance in range(1, max_distance):
+        for distance in np.arange(0.5, max_distance, 0.5):
             # Check if the next cell is an obstacle
             next_cell = pos + distance * direction
             
