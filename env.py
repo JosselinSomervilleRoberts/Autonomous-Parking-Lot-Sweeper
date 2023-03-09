@@ -210,6 +210,8 @@ class Radar:
 
 class AdvancedRadar:
 
+    NORM_DIST_FACT = 2./3.
+
     def __init__(self, i: int, sweeper_config: SweeperConfig, resolution: float = 1, max_radius: float = 1, n_radars: int = 1):
         self.i = i
         self.resolution = resolution
@@ -258,6 +260,12 @@ class AdvancedRadar:
 
     def get_normalized_distances(self) -> np.ndarray:
         return self._norm_distances
+
+    def get_observed_distances(self) -> np.ndarray:
+        obs = self._norm_distances.copy()
+        obs[obs >= 0] *= self.NORM_DIST_FACT
+        obs[obs < 0] = 1.0
+        return obs
 
     def get_distances(self) -> np.ndarray:
         return self._distances
@@ -576,7 +584,10 @@ class SweeperEnv(gym.Env):
                     fmin = fmid
             STEP_BACK_ON_COLLISION = 0.5
             norm_dir = np.linalg.norm(collision_position - prev_position)
-            normalized_dir = (collision_position - prev_position) / norm_dir
+            if norm_dir == 0:
+                normalized_dir = np.array([0., 0.])
+            else:
+                normalized_dir = (collision_position - prev_position) / norm_dir
             self.sweeper.position = prev_position + (fmin * norm_dir - STEP_BACK_ON_COLLISION) * normalized_dir
             # Check if self.sweeper.position cointains a nan
             if np.isnan(self.sweeper.position).any():
@@ -755,8 +766,9 @@ class SweeperEnv(gym.Env):
                 elif cell_value == Map.CELL_EMPTY:
                     self.display_value("Empty radius: ", r, int(self.render_options.width * 0.74), -30, color=radars_color[idx])
                 for radar in self.radars:
-                    distance = radar.get_normalized_distances()[idx][r] * radar.max_distances[idx][r]
-                    if distance >= 0:
+                    distance = radar.get_observed_distances()[idx][r]
+                    if distance <= AdvancedRadar.NORM_DIST_FACT:
+                        distance *= radar.max_distances[idx][r] / AdvancedRadar.NORM_DIST_FACT
                         rad_angle = radar.get_rad_angle(self.sweeper)
                         direction = self.resolution * distance * np.array([np.cos(rad_angle), np.sin(rad_angle)])
                         position = radar.get_position(self.sweeper)

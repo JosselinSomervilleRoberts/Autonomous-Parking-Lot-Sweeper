@@ -164,33 +164,59 @@ class Net(BaseFeaturesExtractor):
         
         # RADARS
         # get shape of observation_space["radars"]
-        (n_cell, n_dir, n_r) = observation_space["radars"].shape
-        channel_inter_size = 16
-        dir_inter_size = 16
-        channel_inter_size_2 = 8
-        kernel_size_3 = 3
+        (self.n_cell, self.n_dir, self.n_r) = observation_space["radars"].shape
+        self.channel_inter_size = 16
         # Step 1: per direction, convolve type of cells and different radius: (n_cell, n_dir, n_r) -> (channel_inter_size, n_dir, 1)
-        self.conv1 = nn.Conv2d(in_channels=n_cell, out_channels=channel_inter_size, kernel_size=(1, n_r), padding=0, bias=True, stride=1)
-        # Step 2: Reshape: (channel_inter_size, n_dir, 1) -> (1, n_dir, channel_inter_size)
-        # Step 3: convolve directions: (1, n_dir, channel_inter_size) -> (channel_inter_size_2, dir_inter_size, 1)
-        stride2 = int(n_dir / dir_inter_size)
-        padding2 = int((n_dir - stride2) / 2)
-        self.conv2 = nn.Conv2d(in_channels=1, out_channels=channel_inter_size_2, kernel_size=(n_dir, channel_inter_size), padding_mode="circular", padding=(padding2,0), bias=True, stride=(stride2, 1))
-        # Step 4: Reshape: (channel_inter_size_2, dir_inter_size, 1) -> (1, dir_inter_size, channel_inter_size_2)
-        # Step 5: convolve directions: (1, dir_inter_size, channel_inter_size_2) -> (1, dir_inter_size, 1)
-        #padding3 = int((kernel_size_3 - 1) / 2)
-        #self.conv3 = nn.Conv2d(in_channels=1, out_channels=1, kernel_size=(kernel_size_3, channel_inter_size_2), padding_mode="circular", padding=(padding3,0), bias=True, stride=1)
-        # Step 6: Reshape: (1, dir_inter_size, 1) -> (dir_inter_size)
+        self.conv1 = nn.Conv2d(in_channels=self.n_cell, out_channels=self.channel_inter_size, kernel_size=(1, self.n_r), padding=0, bias=True, stride=1)
+        print("conv1 weight shape: ", self.conv1.weight.shape)
+
+        # Step 2: convolve directions: (channel_inter_size, n_dir, 1) -> (channel_inter_size_2, n_dir_2, 1)
+        self.n_dir_2 = 12
+        self.kernel_size_2 = 7
+        self.channel_inter_size_2 = 8
+        self.stride2 = int(self.n_dir / self.n_dir_2)
+        self.padding2 = int((self.stride2 * self.n_dir_2 - 1 + self.kernel_size_2 - self.n_dir) / 2)
+        self.conv2 = nn.Conv2d(in_channels=self.channel_inter_size, out_channels=self.channel_inter_size_2, kernel_size=(self.kernel_size_2, 1), padding_mode="circular", padding=(self.padding2,0), bias=True, stride=(self.stride2, 1))
+        self.first_run = True
+
+        # Step 3: Reshape: (channel_inter_size_2, n_dir_2, 1) -> (n_dir_2 * dir_inter_size)
+
 
         # OTHER
         # get shape of observation_space["other"]
-        shape_other = observation_space["other"].shape[0]
+        self.shape_other = observation_space["other"].shape[0]
 
         # Concatenate
         # self.fc1 = nn.Linear(in_features=dir_inter_size + shape_other, out_features=features_dim)
-        self.fc1 = nn.Linear(in_features=dir_inter_size*channel_inter_size_2 + shape_other, out_features=features_dim)
+        self.fc1 = nn.Linear(in_features=self.n_dir_2*self.channel_inter_size_2 + self.shape_other, out_features=features_dim)
+        #self.features_dim = features_dim
 
     def forward(self, x):
+        if self.first_run:
+            # Conv 1
+            weight1 = np.zeros((self.channel_inter_size, self.n_cell, 1, self.n_r), dtype=np.float32)
+            weight1[0:8, 0, :, 0] = 1.
+            weight1[8:16, 2, :, 0] = 1.
+            self.conv1.weight = torch.nn.Parameter(torch.FloatTensor(weight1), requires_grad=False)
+            self.conv1.bias = torch.nn.Parameter(torch.FloatTensor([0] * 16), requires_grad=False)
+            for param in self.conv1.parameters():
+                param.requires_grad = False
+
+            # Conv 2
+            weight2 = np.zeros((8, 16, 7, 1))
+            weight2[0:4,0:8,2:5,:] = 1./3.
+            weight2[4:8,8:16,2:5,:] = 1./3.
+            self.conv2.weight = torch.nn.Parameter(torch.FloatTensor(weight2), requires_grad=False)
+            self.conv2.bias = torch.nn.Parameter(torch.FloatTensor([0] * 8), requires_grad=False)
+            for param in self.conv2.parameters():
+                param.requires_grad = False
+
+            # FC 1
+            # Dont freeze for now
+
+            # Dont run this again
+            self.first_run = False
+
         radar = x["radars"]
         other = x["other"]
         batch_size = radar.shape[0]
@@ -201,13 +227,13 @@ class Net(BaseFeaturesExtractor):
         radar = F.relu(self.conv1(radar))
         # Step 2: Reshape: (channel_inter_size, n_dir, 1) -> (1, n_dir, channel_inter_size)
         # print("2. radar.shape: ", radar.shape)
-        radar = radar.swapaxes(-1, -3)
+        #radar = radar.swapaxes(-1, -3)
         # print("3. radar.shape: ", radar.shape)
         # Step 3: convolve directions: (1, n_dir, channel_inter_size) -> (channel_inter_size_2, dir_inter_size, 1)
         radar = F.relu(self.conv2(radar))
         # print("4. radar.shape: ", radar.shape)
         # Step 4: Reshape: (channel_inter_size_2, dir_inter_size, 1) -> (1, dir_inter_size, channel_inter_size_2)
-        radar = radar.swapaxes(-1, -3)
+        #radar = radar.swapaxes(-1, -3)
         # print("5. radar.shape: ", radar.shape)
         # Step 5: convolve directions: (1, dir_inter_size, channel_inter_size_2) -> (1, dir_inter_size, 1)
         #radar = F.relu(self.conv3(radar))
@@ -231,8 +257,8 @@ class Net(BaseFeaturesExtractor):
 
 policy_kwargs = {
     'activation_fn': nn.Tanh,
-    'net_arch':[128, dict(pi=[128, 64], vf=[128, 64])],
-    "features_extractor_kwargs": dict(features_dim=128),
+    'net_arch':[64, dict(pi=[64, 32], vf=[64, 32])],
+    "features_extractor_kwargs": dict(features_dim=64),
     'features_extractor_class':Net,
 }
 
