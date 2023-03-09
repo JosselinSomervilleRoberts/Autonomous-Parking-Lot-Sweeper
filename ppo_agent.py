@@ -195,8 +195,9 @@ class Net(BaseFeaturesExtractor):
         if self.first_run:
             # Conv 1
             weight1 = np.zeros((self.channel_inter_size, self.n_cell, 1, self.n_r), dtype=np.float32)
-            weight1[0:8, 0, :, 0] = 1.
-            weight1[8:16, 2, :, 0] = 1.
+            for i in range(6):
+                weight1[i, 0, 0, i] = 1.
+                weight1[6+i, 2, 0, i] = 1.
             self.conv1.weight = torch.nn.Parameter(torch.FloatTensor(weight1), requires_grad=False)
             self.conv1.bias = torch.nn.Parameter(torch.FloatTensor([0] * 16), requires_grad=False)
             for param in self.conv1.parameters():
@@ -204,15 +205,27 @@ class Net(BaseFeaturesExtractor):
 
             # Conv 2
             weight2 = np.zeros((8, 16, 7, 1))
-            weight2[0:4,0:8,2:5,:] = 1./3.
-            weight2[4:8,8:16,2:5,:] = 1./3.
+            weight2[0,0,3,:] = 1.
+            weight2[1,0,2:5,:] = 1./3.
+            weight2[2,0:2,1:6,:] = 1./10.
+            weight2[3,0:6,0:7,:] = 1./42.
+            weight2[0,6,3,:] = 1.
+            weight2[1,6,2:5,:] = 1./3.
+            weight2[2,6:8,1:6,:] = 1./10.
+            weight2[3,6:12,0:7,:] = 1./42.
             self.conv2.weight = torch.nn.Parameter(torch.FloatTensor(weight2), requires_grad=False)
             self.conv2.bias = torch.nn.Parameter(torch.FloatTensor([0] * 8), requires_grad=False)
             for param in self.conv2.parameters():
                 param.requires_grad = False
 
             # FC 1
-            # Dont freeze for now
+            weight3 = np.zeros(self.fc1.weight.shape, dtype=np.float32)
+            for i in range(self.n_dir_2*self.channel_inter_size_2 + self.shape_other):
+                weight3[i, i] = 1.
+            self.fc1.weight = torch.nn.Parameter(torch.FloatTensor(weight3), requires_grad=False)
+            self.fc1.bias = torch.nn.Parameter(torch.FloatTensor([0] * self.features_dim), requires_grad=False)
+            for param in self.fc1.parameters():
+                param.requires_grad = False
 
             # Dont run this again
             self.first_run = False
@@ -258,7 +271,7 @@ class Net(BaseFeaturesExtractor):
 policy_kwargs = {
     'activation_fn': nn.Tanh,
     'net_arch':[64, dict(pi=[64, 32], vf=[64, 32])],
-    "features_extractor_kwargs": dict(features_dim=64),
+    "features_extractor_kwargs": dict(features_dim=128),
     'features_extractor_class':Net,
 }
 
