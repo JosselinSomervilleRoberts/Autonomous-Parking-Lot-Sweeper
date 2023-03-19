@@ -25,7 +25,7 @@ parser.add_argument("--load_path", type=str, default=None, help="Path to load th
 parser.add_argument("--observation_type", type=str, default="complex", help="Observation type", choices=["simple", "simple-double-radar", "grid-only", "complex"])
 parser.add_argument("--action_type", type=str, default="continuous", help="Action type")
 parser.add_argument("--env_max_steps", type=int, default=4096, help="Max steps per episode")
-parser.add_argument("--env_num_radars", type=int, default=24, help="Number of radars")
+parser.add_argument("--env_num_radars", type=int, default=16, help="Number of radars")
 
 # Reward
 parser.add_argument("--reward_collision", type=float, default=-1024, help="Reward for collision")
