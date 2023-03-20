@@ -1,0 +1,1 @@
+python ppo_agent.py --tensorboard --action_type discrete-minimum --algorithm PPO --observation_type simple-double-radar --policy MlpPolicy --load_path best_model

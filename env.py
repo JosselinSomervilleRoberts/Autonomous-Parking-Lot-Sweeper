@@ -188,7 +188,7 @@ class Radar:
         if self.value == Map.CELL_OBSTACLE:
             dist = map.compute_distance_to_closest_cell_of_value(position, rad_angle, value=self.value, max_distance=self.range) / self.resolution
         else:
-            dist = map.compute_distance_to_closest_zone_of_value(pos=position, rad_angle=rad_angle, value=Map.CELL_EMPTY, radius=7,min_ratio=0.9) / self.resolution
+            dist = map.compute_distance_to_closest_zone_of_value(pos=position, rad_angle=rad_angle, value=Map.CELL_EMPTY, radius=1,min_ratio=0.9) / self.resolution
         self.distance = dist
         return dist
     

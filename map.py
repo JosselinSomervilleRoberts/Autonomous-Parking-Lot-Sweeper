@@ -474,7 +474,7 @@ class Map:
     def compute_distance_to_closest_cell_of_value(self, pos, rad_angle, value, max_distance=1000):
         """Returns the distance to the closest obstacle in the given direction"""
         # Compute the direction vector
-        warn("This function is deprecated, use compute_distance_to_closest_zone_of_value with a radius of 0 instead")
+        #warn("This function is deprecated, use compute_distance_to_closest_zone_of_value with a radius of 0 instead")
         direction = np.array([np.cos(rad_angle), np.sin(rad_angle)], dtype=float)
 
         # Compute the distance to the closest obstacle using a step by step approach
